@@ -1,0 +1,17 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" .}}DeadDrop{{end}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body class="bg-gray-50 min-h-screen" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+    {{template "nav" .}}
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        {{template "flash" .}}
+        {{block "content" .}}{{end}}
+    </main>
+</body>
+</html>{{end}}

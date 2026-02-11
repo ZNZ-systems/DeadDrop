@@ -1,0 +1,19 @@
+{{define "domain_row"}}
+<a href="/domains/{{.Domain.PublicID}}" class="block px-6 py-4 hover:bg-gray-50 transition">
+    <div class="flex items-center justify-between">
+        <div>
+            <span class="font-medium text-gray-900">{{.Domain.Name}}</span>
+            {{if .Domain.Verified}}
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Verified</span>
+            {{else}}
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Unverified</span>
+            {{end}}
+        </div>
+        {{if gt .UnreadCount 0}}
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+            {{.UnreadCount}} unread
+        </span>
+        {{end}}
+    </div>
+</a>
+{{end}}
