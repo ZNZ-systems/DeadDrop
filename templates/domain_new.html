@@ -8,6 +8,7 @@
     {{end}}
 
     <form method="POST" action="/domains" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div>
             <label for="name" class="block text-sm font-medium text-gray-700">Domain Name</label>
             <input type="text" name="name" id="name" required placeholder="example.com"

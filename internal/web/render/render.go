@@ -59,12 +59,18 @@ func NewRenderer(fsys fs.FS) *Renderer {
 // Render executes the named template with the given data.
 // For HTMX partial requests (HX-Request header), it executes just the "content"
 // block. For full page requests, it executes the "base" template.
+// It automatically injects the CSRF token from the cookie into template data.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, tmpl string, data map[string]interface{}) {
 	t, ok := r.templates[tmpl]
 	if !ok {
 		slog.Error("template not found", "name", tmpl)
 		http.Error(w, "template not found", http.StatusInternalServerError)
 		return
+	}
+
+	// Inject CSRF token from cookie so templates can reference {{.CSRFToken}}
+	if cookie, err := req.Cookie("csrf_token"); err == nil {
+		data["CSRFToken"] = cookie.Value
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
