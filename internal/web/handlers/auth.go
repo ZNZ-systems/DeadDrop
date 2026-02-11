@@ -10,15 +10,17 @@ import (
 
 // AuthHandler handles HTTP requests for authentication routes.
 type AuthHandler struct {
-	auth   *auth.Service
-	render *render.Renderer
+	auth          *auth.Service
+	render        *render.Renderer
+	secureCookies bool
 }
 
 // NewAuthHandler creates a new AuthHandler with the given auth service and renderer.
-func NewAuthHandler(authService *auth.Service, renderer *render.Renderer) *AuthHandler {
+func NewAuthHandler(authService *auth.Service, renderer *render.Renderer, secureCookies bool) *AuthHandler {
 	return &AuthHandler{
-		auth:   authService,
-		render: renderer,
+		auth:          authService,
+		render:        renderer,
+		secureCookies: secureCookies,
 	}
 }
 
@@ -36,6 +38,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 			Path:     "/",
 			MaxAge:   -1,
 			HttpOnly: true,
+			Secure:   h.secureCookies,
 		})
 	}
 
@@ -45,7 +48,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 // HandleLogin processes the login form submission.
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.")
+		setFlash(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -55,7 +58,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Invalid email or password.")
+		setFlash(w, "Invalid email or password.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -66,6 +69,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  session.ExpiresAt,
 		HttpOnly: true,
+		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -86,6 +90,7 @@ func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 			Path:     "/",
 			MaxAge:   -1,
 			HttpOnly: true,
+			Secure:   h.secureCookies,
 		})
 	}
 
@@ -95,7 +100,7 @@ func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 // HandleSignup processes the signup form submission.
 func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.")
+		setFlash(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -105,14 +110,14 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	passwordConfirm := r.FormValue("password_confirm")
 
 	if password != passwordConfirm {
-		setFlash(w, "Passwords do not match.")
+		setFlash(w, "Passwords do not match.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
 
 	_, err := h.auth.Signup(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, err.Error())
+		setFlash(w, err.Error(), h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -120,7 +125,7 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	// Auto-login after successful signup.
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Account created. Please log in.")
+		setFlash(w, "Account created. Please log in.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -131,6 +136,7 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  session.ExpiresAt,
 		HttpOnly: true,
+		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -152,6 +158,7 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -159,11 +166,12 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // setFlash sets a flash message cookie for the next request.
-func setFlash(w http.ResponseWriter, message string) {
+func setFlash(w http.ResponseWriter, message string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "flash",
 		Value:    message,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 	})
 }

@@ -59,6 +59,19 @@ func (s *DomainStore) GetDomainsByUserID(ctx context.Context, userID int64) ([]m
 	return domains, rows.Err()
 }
 
+func (s *DomainStore) GetDomainByID(ctx context.Context, id int64) (*models.Domain, error) {
+	d := &models.Domain{}
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, public_id, user_id, name, verification_token, verified, created_at, updated_at
+		 FROM domains WHERE id = $1`,
+		id,
+	).Scan(&d.ID, &d.PublicID, &d.UserID, &d.Name, &d.VerificationToken, &d.Verified, &d.CreatedAt, &d.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
 func (s *DomainStore) GetDomainByPublicID(ctx context.Context, publicID uuid.UUID) (*models.Domain, error) {
 	d := &models.Domain{}
 	err := s.db.QueryRowContext(ctx,

@@ -57,6 +57,14 @@ func (m *mockDomainStore) GetDomainsByUserID(_ context.Context, userID int64) ([
 	return m.byUserID[userID], nil
 }
 
+func (m *mockDomainStore) GetDomainByID(_ context.Context, id int64) (*models.Domain, error) {
+	d, ok := m.domains[id]
+	if !ok {
+		return nil, errors.New("domain not found")
+	}
+	return d, nil
+}
+
 func (m *mockDomainStore) GetDomainByPublicID(_ context.Context, publicID uuid.UUID) (*models.Domain, error) {
 	d, ok := m.byPublicID[publicID]
 	if !ok {

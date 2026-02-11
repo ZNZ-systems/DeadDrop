@@ -20,8 +20,9 @@ type Config struct {
 	RateLimitRPS   float64
 	RateLimitBurst int
 
-	SessionMaxAge int // hours
-	BaseURL       string
+	SessionMaxAge  int // hours
+	BaseURL        string
+	SecureCookies  bool
 }
 
 func Load() (*Config, error) {
@@ -67,6 +68,7 @@ func Load() (*Config, error) {
 		RateLimitBurst: burst,
 		SessionMaxAge:  sessionMaxAge,
 		BaseURL:        getEnv("BASE_URL", "http://localhost:8080"),
+		SecureCookies:  getEnv("SECURE_COOKIES", "true") != "false",
 	}, nil
 }
 

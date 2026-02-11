@@ -45,6 +45,14 @@ func (m *mockMessageStore) CreateMessage(_ context.Context, domainID int64, send
 	return msg, nil
 }
 
+func (m *mockMessageStore) GetMessageByID(_ context.Context, id int64) (*models.Message, error) {
+	msg, ok := m.messages[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return msg, nil
+}
+
 func (m *mockMessageStore) GetMessagesByDomainID(_ context.Context, domainID int64, limit, offset int) ([]models.Message, error) {
 	msgs := m.byDomain[domainID]
 	result := make([]models.Message, 0)
@@ -121,6 +129,14 @@ func (m *mockDomainStore) CreateDomain(_ context.Context, _ int64, _, _ string) 
 
 func (m *mockDomainStore) GetDomainsByUserID(_ context.Context, _ int64) ([]models.Domain, error) {
 	return nil, nil
+}
+
+func (m *mockDomainStore) GetDomainByID(_ context.Context, id int64) (*models.Domain, error) {
+	d, ok := m.byID[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return d, nil
 }
 
 func (m *mockDomainStore) GetDomainByPublicID(_ context.Context, publicID uuid.UUID) (*models.Domain, error) {

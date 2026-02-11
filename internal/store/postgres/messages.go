@@ -38,6 +38,19 @@ func (s *MessageStore) CreateMessage(ctx context.Context, domainID int64, sender
 	return msg, nil
 }
 
+func (s *MessageStore) GetMessageByID(ctx context.Context, id int64) (*models.Message, error) {
+	m := &models.Message{}
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, public_id, domain_id, sender_name, sender_email, body, is_read, created_at
+		 FROM messages WHERE id = $1`,
+		id,
+	).Scan(&m.ID, &m.PublicID, &m.DomainID, &m.SenderName, &m.SenderEmail, &m.Body, &m.IsRead, &m.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (s *MessageStore) GetMessagesByDomainID(ctx context.Context, domainID int64, limit, offset int) ([]models.Message, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, public_id, domain_id, sender_name, sender_email, body, is_read, created_at

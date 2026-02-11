@@ -73,9 +73,9 @@ func main() {
 	renderer := render.NewRenderer(templates.FS)
 
 	// Handlers
-	authHandler := handlers.NewAuthHandler(authService, renderer)
-	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer)
-	messageHandler := handlers.NewMessageHandler(messageService, renderer)
+	authHandler := handlers.NewAuthHandler(authService, renderer, cfg.SecureCookies)
+	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.SecureCookies)
+	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
 	apiHandler := handlers.NewAPIHandler(messageService)
 
 	// Router
@@ -88,6 +88,8 @@ func main() {
 		Renderer:       renderer,
 		Limiter:        limiter,
 		StaticFS:       static.FS,
+		SecureCookies:  cfg.SecureCookies,
+		DB:             db,
 	})
 
 	// Session cleanup goroutine

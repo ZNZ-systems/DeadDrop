@@ -14,17 +14,19 @@ import (
 
 // DomainHandler contains HTTP handlers for domain CRUD operations.
 type DomainHandler struct {
-	domains  *domain.Service
-	messages store.MessageStore
-	render   *render.Renderer
+	domains       *domain.Service
+	messages      store.MessageStore
+	render        *render.Renderer
+	secureCookies bool
 }
 
 // NewDomainHandler creates a new DomainHandler.
-func NewDomainHandler(domains *domain.Service, messages store.MessageStore, r *render.Renderer) *DomainHandler {
+func NewDomainHandler(domains *domain.Service, messages store.MessageStore, r *render.Renderer, secureCookies bool) *DomainHandler {
 	return &DomainHandler{
-		domains:  domains,
-		messages: messages,
-		render:   r,
+		domains:       domains,
+		messages:      messages,
+		render:        r,
+		secureCookies: secureCookies,
 	}
 }
 
@@ -120,7 +122,12 @@ func (h *DomainHandler) ShowDomainDetail(w http.ResponseWriter, r *http.Request)
 	d, err := h.domains.GetByPublicID(r.Context(), publicID)
 	if err != nil {
 		slog.Error("failed to get domain", "error", err)
-		http.Error(w, "domain not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if d.UserID != user.ID {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
@@ -155,15 +162,20 @@ func (h *DomainHandler) HandleVerifyDomain(w http.ResponseWriter, r *http.Reques
 	d, err := h.domains.GetByPublicID(r.Context(), publicID)
 	if err != nil {
 		slog.Error("failed to get domain", "error", err)
-		http.Error(w, "domain not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if d.UserID != user.ID {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
 	if err := h.domains.Verify(r.Context(), d); err != nil {
 		slog.Warn("domain verification failed", "domain", d.Name, "error", err)
-		setFlash(w, "Verification failed: "+err.Error())
+		setFlash(w, "Verification failed: "+err.Error(), h.secureCookies)
 	} else {
-		setFlash(w, "Domain verified successfully!")
+		setFlash(w, "Domain verified successfully!", h.secureCookies)
 	}
 
 	http.Redirect(w, r, "/domains/"+d.PublicID.String(), http.StatusSeeOther)
@@ -187,7 +199,12 @@ func (h *DomainHandler) HandleDeleteDomain(w http.ResponseWriter, r *http.Reques
 	d, err := h.domains.GetByPublicID(r.Context(), publicID)
 	if err != nil {
 		slog.Error("failed to get domain", "error", err)
-		http.Error(w, "domain not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if d.UserID != user.ID {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 

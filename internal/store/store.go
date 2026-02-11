@@ -23,6 +23,7 @@ type SessionStore interface {
 type DomainStore interface {
 	CreateDomain(ctx context.Context, userID int64, name, verificationToken string) (*models.Domain, error)
 	GetDomainsByUserID(ctx context.Context, userID int64) ([]models.Domain, error)
+	GetDomainByID(ctx context.Context, id int64) (*models.Domain, error)
 	GetDomainByPublicID(ctx context.Context, publicID uuid.UUID) (*models.Domain, error)
 	GetDomainByName(ctx context.Context, name string) (*models.Domain, error)
 	MarkDomainVerified(ctx context.Context, id int64) error
@@ -31,6 +32,7 @@ type DomainStore interface {
 
 type MessageStore interface {
 	CreateMessage(ctx context.Context, domainID int64, senderName, senderEmail, body string) (*models.Message, error)
+	GetMessageByID(ctx context.Context, id int64) (*models.Message, error)
 	GetMessagesByDomainID(ctx context.Context, domainID int64, limit, offset int) ([]models.Message, error)
 	MarkMessageRead(ctx context.Context, id int64) error
 	DeleteMessage(ctx context.Context, id int64) error
