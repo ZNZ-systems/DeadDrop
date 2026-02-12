@@ -4,115 +4,132 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeadDrop Widget Demo</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,10 90,50 50,90 10,50' fill='%23ff0000'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #f5f0e8;
+            --black: #0a0a0a;
+            --red: #ff2200;
+            --white: #f5f0e8;
+            --gray: #888;
+            --border-thick: 4px solid var(--black);
+            --font-head: 'Space Grotesk', system-ui, sans-serif;
+            --font-mono: 'Space Mono', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            min-height: 100vh;
-        }
-        header {
-            background: #1a1a2e;
-            color: white;
-            padding: 20px 32px;
-        }
-        header h1 {
-            font-size: 22px;
-            font-weight: 600;
-        }
-        header p {
-            font-size: 14px;
-            color: #94a3b8;
-            margin-top: 4px;
-        }
-        main {
-            max-width: 720px;
-            margin: 40px auto;
-            padding: 0 24px;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 32px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 24px;
-        }
-        .card h2 {
-            font-size: 18px;
-            margin-bottom: 12px;
-            color: #1a1a2e;
-        }
-        .card p {
-            font-size: 14px;
-            line-height: 1.7;
-            color: #475569;
-        }
-        code {
-            background: #f1f5f9;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 13px;
-            color: #6366f1;
-        }
-        pre {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 16px 20px;
-            border-radius: 8px;
-            overflow-x: auto;
+            font-family: var(--font-mono);
             font-size: 13px;
             line-height: 1.6;
-            margin-top: 12px;
+            color: var(--black);
+            background: var(--bg);
         }
-        .badge {
-            display: inline-block;
-            background: #ecfdf5;
-            color: #065f46;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 999px;
-            margin-bottom: 12px;
+
+        ::selection { background: var(--red); color: var(--white); }
+
+        header {
+            background: var(--black);
+            color: var(--white);
+            padding: 1.5rem 2rem;
+            border-bottom: var(--border-thick);
         }
+        header h1 {
+            font-family: var(--font-head); font-size: 18px;
+            font-weight: 700; text-transform: uppercase;
+            letter-spacing: -0.02em;
+        }
+        header h1 span { color: var(--red); }
+        header p {
+            font-size: 11px; color: #666;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            margin-top: 0.25rem;
+        }
+
+        main { max-width: 720px; margin: 0 auto; padding: 3rem 2rem; }
+
+        .card {
+            border: var(--border-thick);
+            padding: 2rem;
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        .card:last-child { border-bottom: var(--border-thick); }
+
+        .card h2 {
+            font-family: var(--font-head); font-size: 18px;
+            font-weight: 700; margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+        .card p {
+            font-size: 12px; color: var(--gray); line-height: 1.9;
+        }
+
+        .badge-live {
+            display: inline-block; font-size: 10px; font-weight: 700;
+            letter-spacing: 0.15em; text-transform: uppercase;
+            padding: 4px 12px; border: 2px solid var(--red);
+            color: var(--red); margin-bottom: 1rem;
+        }
+
+        pre {
+            background: var(--black); color: #aaa;
+            padding: 1rem 1.25rem; font-family: var(--font-mono);
+            font-size: 12px; line-height: 1.8;
+            margin-top: 1rem; border: var(--border-thick);
+        }
+        pre .hl { color: var(--red); }
+        pre .val { color: #ffd700; }
+
+        code {
+            background: var(--black); color: var(--red);
+            padding: 2px 6px; font-size: 12px;
+            font-family: var(--font-mono);
+        }
+
         .arrow-hint {
-            position: fixed;
-            bottom: 90px;
-            right: 90px;
-            background: #1a1a2e;
-            color: white;
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-size: 13px;
+            position: fixed; bottom: 90px; right: 90px;
+            background: var(--black); color: var(--white);
+            padding: 8px 16px; font-family: var(--font-mono);
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.1em; text-transform: uppercase;
             animation: bounce 2s ease infinite;
             pointer-events: none;
         }
         .arrow-hint::after {
             content: '';
-            position: absolute;
-            right: -6px;
-            bottom: 12px;
+            position: absolute; right: -6px; bottom: 12px;
             width: 0; height: 0;
             border-top: 6px solid transparent;
             border-bottom: 6px solid transparent;
-            border-left: 6px solid #1a1a2e;
+            border-left: 6px solid var(--black);
         }
         @keyframes bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-6px); }
+        }
+
+        footer {
+            padding: 2rem; border-top: var(--border-thick);
+            text-align: center; font-size: 11px;
+            color: var(--gray); margin-top: 3rem;
         }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>DeadDrop Widget Demo</h1>
-    <p>This page demonstrates the embeddable contact form widget</p>
+    <h1>Dead<span>Drop</span> Widget Demo</h1>
+    <p>Embeddable contact form preview</p>
 </header>
 
 <main>
     <div class="card">
-        <span class="badge">Live Demo</span>
+        <div class="badge-live">Live Demo</div>
         <h2>Try the Widget</h2>
         <p>
             Click the floating mail button in the bottom-right corner to open the
@@ -123,11 +140,11 @@
     <div class="card">
         <h2>How to Embed</h2>
         <p>Add this single script tag to any HTML page:</p>
-        <pre>&lt;script
-  src="http://localhost:8080/static/widget.js"
-  data-deaddrop-id="YOUR_DOMAIN_UUID"&gt;
-&lt;/script&gt;</pre>
-        <p style="margin-top: 12px;">
+        <pre><span class="hl">&lt;script</span>
+  src=<span class="val">"http://localhost:8080/static/widget.js"</span>
+  data-deaddrop-id=<span class="val">"YOUR_DOMAIN_UUID"</span><span class="hl">&gt;</span>
+<span class="hl">&lt;/script&gt;</span></pre>
+        <p style="margin-top: 1rem;">
             Replace <code>YOUR_DOMAIN_UUID</code> with the public ID from your
             registered domain in the DeadDrop dashboard.
         </p>
@@ -136,15 +153,17 @@
     <div class="card">
         <h2>How It Works</h2>
         <p>
-            1. Register your domain in the dashboard<br>
-            2. Verify ownership via DNS TXT record<br>
-            3. Add the embed code to your site<br>
-            4. Messages appear in your dashboard
+            01 &mdash; Register your domain in the dashboard<br>
+            02 &mdash; Verify ownership via DNS TXT record<br>
+            03 &mdash; Add the embed code to your site<br>
+            04 &mdash; Messages appear in your dashboard
         </p>
     </div>
 </main>
 
 <div class="arrow-hint">Try the widget!</div>
+
+<footer>DEADDROP WIDGET DEMO &copy; 2026</footer>
 
 <!--
   DeadDrop Widget Embed

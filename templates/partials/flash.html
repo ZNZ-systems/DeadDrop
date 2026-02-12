@@ -1,6 +1,6 @@
 {{define "flash"}}
 {{if .Flash}}
-<div class="mb-4 p-3 rounded {{if eq .FlashType "error"}}bg-red-100 text-red-800{{else}}bg-green-100 text-green-800{{end}}">
+<div class="flash {{if eq .FlashType "error"}}flash-error{{else}}flash-success{{end}}">
     {{.Flash}}
 </div>
 {{end}}

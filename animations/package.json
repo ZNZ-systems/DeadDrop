@@ -1,0 +1,26 @@
+{
+  "name": "deaddrop-animations",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts",
+    "render:all": "remotion render src/index.ts FullTour out/full-tour.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.261",
+    "@remotion/google-fonts": "4.0.261",
+    "@remotion/tailwind-v4": "4.0.261",
+    "@remotion/transitions": "4.0.261",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.261"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "sideEffects": ["*.css"]
+}

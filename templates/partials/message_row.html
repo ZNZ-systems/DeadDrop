@@ -1,24 +1,20 @@
 {{define "message_row"}}
-<div class="px-6 py-4 {{if not .IsRead}}bg-indigo-50{{end}}" id="message-{{.ID}}">
-    <div class="flex items-start justify-between">
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-                {{if .SenderName}}<span class="font-medium text-gray-900 text-sm">{{.SenderName}}</span>{{end}}
-                {{if .SenderEmail}}<span class="text-gray-500 text-sm">{{.SenderEmail}}</span>{{end}}
-                {{if not .IsRead}}<span class="inline-block w-2 h-2 bg-indigo-500 rounded-full"></span>{{end}}
-            </div>
-            <p class="text-gray-700 text-sm whitespace-pre-wrap">{{.Body}}</p>
-            <span class="text-xs text-gray-400 mt-1 block">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</span>
-        </div>
-        <div class="flex items-center gap-2 ml-4 flex-shrink-0">
-            {{if not .IsRead}}
-            <button hx-post="/messages/{{.ID}}/read" hx-swap="outerHTML" hx-target="#message-{{.ID}}"
-                    class="text-xs text-indigo-600 hover:text-indigo-800">Mark read</button>
-            {{end}}
-            <button hx-delete="/messages/{{.ID}}" hx-swap="outerHTML" hx-target="#message-{{.ID}}"
-                    hx-confirm="Delete this message?"
-                    class="text-xs text-red-600 hover:text-red-800">Delete</button>
-        </div>
+<div class="message-item {{if not .IsRead}}message-unread{{end}}" id="message-{{.ID}}">
+    <div class="message-meta">
+        {{if .SenderName}}<span class="message-sender">{{.SenderName}}</span>{{end}}
+        {{if .SenderEmail}}<span class="message-email">{{.SenderEmail}}</span>{{end}}
+        {{if not .IsRead}}<span class="message-unread-dot"></span>{{end}}
+    </div>
+    <div class="message-body">{{.Body}}</div>
+    <span class="message-time">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</span>
+    <div class="message-actions">
+        {{if not .IsRead}}
+        <button hx-post="/messages/{{.ID}}/read" hx-swap="outerHTML" hx-target="#message-{{.ID}}"
+                class="message-action message-action-read">Mark Read</button>
+        {{end}}
+        <button hx-delete="/messages/{{.ID}}" hx-swap="outerHTML" hx-target="#message-{{.ID}}"
+                hx-confirm="Delete this message?"
+                class="message-action message-action-delete">Delete</button>
     </div>
 </div>
 {{end}}

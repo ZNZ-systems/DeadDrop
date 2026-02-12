@@ -1,38 +1,20 @@
 {{define "title"}}Dashboard — DeadDrop{{end}}
 {{define "content"}}
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Your Domains</h1>
-    <a href="/domains/new" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 text-sm font-medium">
-        Add Domain
-    </a>
+<div class="page-header">
+    <h1 class="page-title">Your Domains</h1>
+    <a href="/domains/new" class="btn-primary">Add Domain</a>
 </div>
 
 {{if .Domains}}
-<div class="bg-white shadow rounded-lg divide-y">
+<div class="list-card">
     {{range .Domains}}
-    <a href="/domains/{{.Domain.PublicID}}" class="block px-6 py-4 hover:bg-gray-50 transition">
-        <div class="flex items-center justify-between">
-            <div>
-                <span class="font-medium text-gray-900">{{.Domain.Name}}</span>
-                {{if .Domain.Verified}}
-                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Verified</span>
-                {{else}}
-                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Unverified</span>
-                {{end}}
-            </div>
-            {{if gt .UnreadCount 0}}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                {{.UnreadCount}} unread
-            </span>
-            {{end}}
-        </div>
-    </a>
+    {{template "domain_row" .}}
     {{end}}
 </div>
 {{else}}
-<div class="text-center py-12 bg-white shadow rounded-lg">
-    <p class="text-gray-500 mb-4">No domains yet. Add your first domain to start receiving messages.</p>
-    <a href="/domains/new" class="text-indigo-600 hover:underline font-medium">Add your first domain</a>
+<div class="empty-state">
+    <p>No domains yet. Add your first domain to start receiving messages.</p>
+    <a href="/domains/new" class="btn-outline">Add Your First Domain</a>
 </div>
 {{end}}
 {{end}}

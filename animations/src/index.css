@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dd-bg: #f5f0e8;
+  --color-dd-black: #0a0a0a;
+  --color-dd-red: #ff2200;
+  --color-dd-green: #22c55e;
+  --color-dd-yellow: #eab308;
+  --color-dd-gray: #888888;
+  --color-dd-white: #f5f0e8;
+  --color-dd-code-bg: #0a0a0a;
+  --color-dd-code-text: #aaaaaa;
+  --color-dd-code-hl: #ff2200;
+  --color-dd-code-val: #ffd700;
+}

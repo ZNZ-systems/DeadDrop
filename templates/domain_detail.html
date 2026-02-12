@@ -1,53 +1,53 @@
 {{define "title"}}{{.Domain.Name}} — DeadDrop{{end}}
 {{define "content"}}
-<div class="mb-6">
-    <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">{{.Domain.Name}}</h1>
-        <form method="POST" action="/domains/{{.Domain.PublicID}}/delete"
-              onsubmit="return confirm('Delete this domain and all its messages?')">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <button type="submit" class="text-sm text-red-600 hover:text-red-800">Delete Domain</button>
-        </form>
-    </div>
-
-    {{if not .Domain.Verified}}
-    <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h2 class="font-medium text-yellow-800 mb-2">DNS Verification Required</h2>
-        <p class="text-sm text-yellow-700 mb-2">Add this TXT record to your domain's DNS:</p>
-        <code class="block bg-white px-3 py-2 rounded border text-sm font-mono break-all">
-            deaddrop-verify={{.Domain.VerificationToken}}
-        </code>
-        <form method="POST" action="/domains/{{.Domain.PublicID}}/verify" class="mt-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <button type="submit" class="bg-yellow-600 text-white px-4 py-1.5 rounded text-sm hover:bg-yellow-700">
-                Check Verification
-            </button>
-        </form>
-    </div>
-    {{else}}
-    <div class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-        <h2 class="font-medium text-green-800 mb-2">Widget Embed Code</h2>
-        <p class="text-sm text-green-700 mb-2">Add this to any page on {{.Domain.Name}}:</p>
-        <code class="block bg-white px-3 py-2 rounded border text-sm font-mono break-all">
-            &lt;script src="{{$.BaseURL}}/static/widget.js" data-deaddrop-id="{{.Domain.PublicID}}"&gt;&lt;/script&gt;
-        </code>
-    </div>
-    {{end}}
+<div class="page-header">
+    <h1 class="page-title">{{.Domain.Name}}</h1>
+    <form method="POST" action="/domains/{{.Domain.PublicID}}/delete"
+          onsubmit="return confirm('Delete this domain and all its messages?')">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn-outline-red btn-sm">Delete Domain</button>
+    </form>
 </div>
 
-<h2 class="text-lg font-semibold mb-4">Messages</h2>
+{{if not .Domain.Verified}}
+<div class="info-panel info-panel-warn">
+    <div class="info-panel-title">DNS Verification Required</div>
+    <p class="info-panel-text">Add this TXT record to your domain's DNS settings:</p>
+    <div class="code-block">
+        <span class="hl">deaddrop-verify</span>=<span class="val">{{.Domain.VerificationToken}}</span>
+    </div>
+    <form method="POST" action="/domains/{{.Domain.PublicID}}/verify" style="margin-top: 1.25rem;">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn-outline btn-sm">Check Verification</button>
+    </form>
+</div>
+{{else}}
+<div class="info-panel info-panel-success">
+    <div class="info-panel-title">Widget Embed Code</div>
+    <p class="info-panel-text">Add this script tag to any page on {{.Domain.Name}}:</p>
+    <div class="code-block">
+        <span class="hl">&lt;script</span> <span style="color:#f5f0e8;">src</span>=<span class="val">"{{$.BaseURL}}/static/widget.js"</span>
+  <span style="color:#f5f0e8;">data-deaddrop-id</span>=<span class="val">"{{.Domain.PublicID}}"</span><span class="hl">&gt;&lt;/script&gt;</span>
+    </div>
+</div>
+{{end}}
+
+<div class="section-divider">
+    <span class="num">01</span>
+    <span>Messages</span>
+</div>
 
 {{if .Messages}}
-<div class="bg-white shadow rounded-lg divide-y" id="messages">
+<div class="list-card" id="messages" style="margin-top: 0; border-top: none;">
     {{range .Messages}}
     {{template "message_row" .}}
     {{end}}
 </div>
 {{else}}
-<div class="text-center py-8 bg-white shadow rounded-lg">
-    <p class="text-gray-500">No messages yet.</p>
+<div class="empty-state" style="border-top: none;">
+    <p>No messages yet. Once the widget is installed, messages will appear here.</p>
 </div>
 {{end}}
 
-<a href="/" class="block mt-6 text-sm text-gray-600 hover:underline">Back to dashboard</a>
+<a href="/" class="back-link">Back to dashboard</a>
 {{end}}
