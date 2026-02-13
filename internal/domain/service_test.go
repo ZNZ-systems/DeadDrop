@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -295,5 +296,64 @@ func TestDelete_Success(t *testing.T) {
 	_, err = svc.GetByPublicID(context.Background(), d.PublicID)
 	if err == nil {
 		t.Error("expected domain to be deleted")
+	}
+}
+
+func TestFileResolver_LookupTXT(t *testing.T) {
+	f, err := os.CreateTemp("", "dns-overrides-*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	_, _ = f.WriteString("example.com=deaddrop-verify=abc-123\n")
+	_, _ = f.WriteString("other.com=deaddrop-verify=def-456\n")
+	f.Close()
+
+	resolver, err := NewFileResolver(f.Name())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	records, err := resolver.LookupTXT("example.com")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(records) != 1 || records[0] != "deaddrop-verify=abc-123" {
+		t.Errorf("expected [deaddrop-verify=abc-123], got %v", records)
+	}
+
+	records, err = resolver.LookupTXT("nonexistent.com")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(records) != 0 {
+		t.Errorf("expected empty records, got %v", records)
+	}
+}
+
+func TestFileResolver_ReloadsFile(t *testing.T) {
+	f, err := os.CreateTemp("", "dns-overrides-*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	f.Close()
+
+	resolver, err := NewFileResolver(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	records, _ := resolver.LookupTXT("example.com")
+	if len(records) != 0 {
+		t.Errorf("expected empty, got %v", records)
+	}
+
+	os.WriteFile(f.Name(), []byte("example.com=deaddrop-verify=new-token\n"), 0644)
+
+	records, _ = resolver.LookupTXT("example.com")
+	if len(records) != 1 || records[0] != "deaddrop-verify=new-token" {
+		t.Errorf("expected [deaddrop-verify=new-token], got %v", records)
 	}
 }
