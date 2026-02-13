@@ -14,8 +14,8 @@ FAIL=0
 TOTAL=0
 
 # ─── Helpers ─────────────────────────────────────────────────────────
-pass() { ((PASS++)); ((TOTAL++)); echo "  ✓ $1"; }
-fail() { ((FAIL++)); ((TOTAL++)); echo "  ✗ $1: $2"; }
+pass() { ((PASS++)) || true; ((TOTAL++)) || true; echo "  ✓ $1"; }
+fail() { ((FAIL++)) || true; ((TOTAL++)) || true; echo "  ✗ $1: $2"; }
 
 assert_status() {
     local desc="$1" expected="$2" actual="$3"
@@ -102,9 +102,9 @@ page=$(do_post "/domains" -d "name=test.example.com")
 assert_contains "Domain created" "$page" "test.example.com"
 
 # Extract verification token from domain detail page
-VERIFY_TOKEN=$(echo "$page" | grep -oP 'deaddrop-verify=\K[a-f0-9-]+' | head -1)
+VERIFY_TOKEN=$(echo "$page" | grep -oP 'deaddrop-verify=\K[a-f0-9-]+' | head -1 || true)
 if [[ -z "$VERIFY_TOKEN" ]]; then
-    VERIFY_TOKEN=$(echo "$page" | grep -oP 'class="val">\K[^<]+' | head -1)
+    VERIFY_TOKEN=$(echo "$page" | grep -oP 'class="val">\K[^<]+' | head -1 || true)
 fi
 
 if [[ -n "$VERIFY_TOKEN" ]]; then
@@ -114,7 +114,7 @@ else
 fi
 
 # Extract domain public ID from URL
-DOMAIN_PUBLIC_ID=$(echo "$page" | grep -oP '/domains/\K[a-f0-9-]{36}' | head -1)
+DOMAIN_PUBLIC_ID=$(echo "$page" | grep -oP '/domains/\K[a-f0-9-]{36}' | head -1 || true)
 if [[ -n "$DOMAIN_PUBLIC_ID" ]]; then
     pass "Domain public ID: ${DOMAIN_PUBLIC_ID:0:8}..."
 else
@@ -131,9 +131,9 @@ assert_contains "Domain verification succeeds" "$page" "verified\|Widget Embed C
 
 # 1.6 — Get mailbox creation form (need internal domain ID)
 page=$(do_get "/mailboxes/new")
-DOMAIN_INTERNAL_ID=$(echo "$page" | grep -oP 'value="(\d+)".*?test\.example\.com' | grep -oP '\d+' | head -1)
+DOMAIN_INTERNAL_ID=$(echo "$page" | grep -oP 'value="(\d+)".*?test\.example\.com' | grep -oP '\d+' | head -1 || true)
 if [[ -z "$DOMAIN_INTERNAL_ID" ]]; then
-    DOMAIN_INTERNAL_ID=$(echo "$page" | grep 'test.example.com' | grep -oP 'value="(\d+)"' | grep -oP '\d+' | head -1)
+    DOMAIN_INTERNAL_ID=$(echo "$page" | grep 'test.example.com' | grep -oP 'value="(\d+)"' | grep -oP '\d+' | head -1 || true)
 fi
 
 if [[ -n "$DOMAIN_INTERNAL_ID" ]]; then
@@ -150,7 +150,7 @@ page=$(do_post "/mailboxes" \
 assert_contains "Mailbox created" "$page" "Support"
 
 # Extract mailbox public ID
-MAILBOX_PUBLIC_ID=$(echo "$page" | grep -oP '/mailboxes/\K[a-f0-9-]{36}' | head -1)
+MAILBOX_PUBLIC_ID=$(echo "$page" | grep -oP '/mailboxes/\K[a-f0-9-]{36}' | head -1 || true)
 if [[ -n "$MAILBOX_PUBLIC_ID" ]]; then
     pass "Mailbox public ID: ${MAILBOX_PUBLIC_ID:0:8}..."
 else
@@ -164,7 +164,7 @@ page=$(do_post "/mailboxes/${MAILBOX_PUBLIC_ID}/streams" \
 assert_contains "Form stream created" "$page" "Widget:"
 
 # Extract widget ID for public API
-WIDGET_ID=$(echo "$page" | grep -oP 'Widget: \K[a-f0-9-]{36}' | head -1)
+WIDGET_ID=$(echo "$page" | grep -oP 'Widget: \K[a-f0-9-]{36}' | head -1 || true)
 if [[ -n "$WIDGET_ID" ]]; then
     pass "Widget ID: ${WIDGET_ID:0:8}..."
 else
@@ -185,7 +185,7 @@ page=$(do_get "/mailboxes/${MAILBOX_PUBLIC_ID}")
 assert_contains "Conversation visible" "$page" "Hello from e2e test"
 
 # Extract conversation public ID
-CONV_PUBLIC_ID=$(echo "$page" | grep -oP '/conversations/\K[a-f0-9-]{36}' | head -1)
+CONV_PUBLIC_ID=$(echo "$page" | grep -oP '/conversations/\K[a-f0-9-]{36}' | head -1 || true)
 if [[ -n "$CONV_PUBLIC_ID" ]]; then
     pass "Conversation public ID: ${CONV_PUBLIC_ID:0:8}..."
 else
@@ -237,7 +237,7 @@ if command -v swaks &> /dev/null; then
     assert_contains "SMTP conversation visible" "$page" "SMTP e2e test"
 
     # 2.4 — View SMTP conversation
-    SMTP_CONV_ID=$(echo "$page" | grep -oP '/conversations/\K[a-f0-9-]{36}' | head -1)
+    SMTP_CONV_ID=$(echo "$page" | grep -oP '/conversations/\K[a-f0-9-]{36}' | head -1 || true)
     if [[ -n "$SMTP_CONV_ID" && "$SMTP_CONV_ID" != "$CONV_PUBLIC_ID" ]]; then
         page=$(do_get "/mailboxes/${MAILBOX_PUBLIC_ID}/conversations/${SMTP_CONV_ID}")
         assert_contains "SMTP message body visible" "$page" "SMTP\|sent via SMTP"
@@ -282,9 +282,9 @@ API_RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/messages" \
     -d "email=test@test.com")
 assert_contains "Missing message rejected" "$API_RESPONSE" '"error"'
 
-# 3.4 — Invalid domain_id
+# 3.4 — Invalid domain_id (use non-zero UUID to avoid matching email stream default)
 API_RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/messages" \
-    -d "domain_id=00000000-0000-0000-0000-000000000000" \
+    -d "domain_id=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" \
     -d "message=test")
 assert_contains "Invalid domain_id rejected" "$API_RESPONSE" '"error"'
 
