@@ -56,3 +56,17 @@ func (s *Service) SendReply(ctx context.Context, to, fromAddress, fromName, subj
 	}
 	return s.client.SendFrom(from, to, subject, body)
 }
+
+// NotifyNewConversation sends an email notification when a new conversation is started.
+// Implements conversation.Notifier.
+func (s *Service) NotifyNewConversation(ctx context.Context, mailbox *models.Mailbox, conv *models.Conversation, msg *models.ConversationMessage) error {
+	user, err := s.users.GetUserByID(ctx, mailbox.UserID)
+	if err != nil {
+		return fmt.Errorf("mail: failed to look up mailbox owner: %w", err)
+	}
+
+	subject := fmt.Sprintf("New conversation in %s", mailbox.Name)
+	body := NewConversationNotificationBody(mailbox.Name, msg.SenderName, msg.SenderAddress, msg.Body, conv.Subject)
+
+	return s.client.Send(user.Email, subject, body)
+}
