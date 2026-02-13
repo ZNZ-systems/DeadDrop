@@ -23,6 +23,12 @@ type Config struct {
 	SessionMaxAge  int // hours
 	BaseURL        string
 	SecureCookies  bool
+
+	InboundSMTPAddr    string
+	InboundSMTPDomain  string
+	InboundSMTPEnabled bool
+
+	DNSOverrideFile string
 }
 
 func Load() (*Config, error) {
@@ -55,6 +61,11 @@ func Load() (*Config, error) {
 
 	smtpHost := getEnv("SMTP_HOST", "")
 
+	inboundAddr := getEnv("INBOUND_SMTP_ADDR", "")
+	inboundDomain := getEnv("INBOUND_SMTP_DOMAIN", "localhost")
+
+	dnsOverrideFile := getEnv("DNS_OVERRIDE_FILE", "")
+
 	return &Config{
 		Port:           port,
 		DatabaseURL:    dbURL,
@@ -68,7 +79,11 @@ func Load() (*Config, error) {
 		RateLimitBurst: burst,
 		SessionMaxAge:  sessionMaxAge,
 		BaseURL:        getEnv("BASE_URL", "http://localhost:8080"),
-		SecureCookies:  getEnv("SECURE_COOKIES", "true") != "false",
+		SecureCookies:      getEnv("SECURE_COOKIES", "true") != "false",
+		InboundSMTPAddr:    inboundAddr,
+		InboundSMTPDomain:  inboundDomain,
+		InboundSMTPEnabled: inboundAddr != "",
+		DNSOverrideFile:    dnsOverrideFile,
 	}, nil
 }
 

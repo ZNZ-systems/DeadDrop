@@ -1,0 +1,95 @@
+{{define "title"}}{{.Mailbox.Name}} — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">{{.Mailbox.Name}}</h1>
+    <form method="POST" action="/mailboxes/{{.Mailbox.PublicID}}/delete"
+          onsubmit="return confirm('Delete this mailbox and all conversations?')">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn-outline-red btn-sm">Delete Mailbox</button>
+    </form>
+</div>
+
+<div class="info-panel">
+    <div class="info-panel-title">From Address</div>
+    <div class="code-block">{{.Mailbox.FromAddress}}</div>
+</div>
+
+<div class="section-divider">
+    <span class="num">01</span>
+    <span>Streams</span>
+</div>
+
+{{if .Streams}}
+<div class="list-card" style="margin-top: 0; border-top: none;">
+    {{range .Streams}}
+    <div class="list-item">
+        <div>
+            <span class="list-item-name" style="text-transform: uppercase; font-size: 12px;">{{.Type}}</span>
+            {{if eq (printf "%s" .Type) "email"}}
+            <span class="list-item-sub" style="margin-left: 0.75rem;">{{.Address}}</span>
+            {{else}}
+            <span class="list-item-sub" style="margin-left: 0.75rem;">Widget: {{.WidgetID}}</span>
+            {{end}}
+            {{if .Enabled}}
+            <span class="badge" style="margin-left: 0.75rem;">Active</span>
+            {{else}}
+            <span class="badge badge-red" style="margin-left: 0.75rem;">Disabled</span>
+            {{end}}
+        </div>
+        <form method="POST" action="/mailboxes/{{$.Mailbox.PublicID}}/streams/{{.ID}}/delete"
+              onsubmit="return confirm('Delete this stream?')">
+            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+            <button type="submit" class="btn-outline-red btn-sm">Delete</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+<form method="POST" action="/mailboxes/{{.Mailbox.PublicID}}/streams" style="margin-top: 1.5rem;">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0; flex: 0 0 auto;">
+            <label class="form-label">Type</label>
+            <select name="type" class="form-input" style="width: auto;">
+                <option value="form">Form</option>
+                <option value="email">Email</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; flex: 1;">
+            <label class="form-label">Address (email streams only)</label>
+            <input type="text" name="address" class="form-input" placeholder="e.g. support@yourdomain.com">
+        </div>
+        <button type="submit" class="btn-primary">Add Stream</button>
+    </div>
+</form>
+
+<div class="section-divider" style="margin-top: 2rem;">
+    <span class="num">02</span>
+    <span>Conversations</span>
+</div>
+
+{{if .Conversations}}
+<div class="list-card" style="margin-top: 0; border-top: none;">
+    {{range .Conversations}}
+    <a href="/mailboxes/{{$.Mailbox.PublicID}}/conversations/{{.PublicID}}" class="list-item">
+        <div>
+            <span class="list-item-name">{{if .Subject}}{{.Subject}}{{else}}(no subject){{end}}</span>
+            <span class="list-item-sub" style="margin-left: 0.75rem;">{{.CreatedAt.Format "Jan 02, 15:04"}}</span>
+        </div>
+        {{if eq (printf "%s" .Status) "open"}}
+        <span class="badge">Open</span>
+        {{else}}
+        <span class="badge badge-red">Closed</span>
+        {{end}}
+    </a>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state" style="border-top: none;">
+    <p>No conversations yet. Messages will appear here once received.</p>
+</div>
+{{end}}
+
+<a href="/" class="back-link">Back to dashboard</a>
+{{end}}

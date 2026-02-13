@@ -1,0 +1,51 @@
+{{define "title"}}{{if .Conversation.Subject}}{{.Conversation.Subject}}{{else}}Conversation{{end}} — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">{{if .Conversation.Subject}}{{.Conversation.Subject}}{{else}}(no subject){{end}}</h1>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        {{if eq (printf "%s" .Conversation.Status) "open"}}
+        <span class="badge">Open</span>
+        <form method="POST" action="/mailboxes/{{.Mailbox.PublicID}}/conversations/{{.Conversation.PublicID}}/close">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button type="submit" class="btn-outline-red btn-sm">Close</button>
+        </form>
+        {{else}}
+        <span class="badge badge-red">Closed</span>
+        {{end}}
+    </div>
+</div>
+
+<div class="list-card">
+    {{range .Messages}}
+    <div class="message-item {{if eq (printf "%s" .Direction) "inbound"}}message-unread{{end}}" {{if eq (printf "%s" .Direction) "outbound"}}style="border-left: 4px solid var(--black);"{{end}}>
+        <div class="message-meta">
+            <span class="message-sender">{{if .SenderName}}{{.SenderName}}{{else}}{{.SenderAddress}}{{end}}</span>
+            {{if and .SenderName .SenderAddress}}
+            <span class="message-email">&lt;{{.SenderAddress}}&gt;</span>
+            {{end}}
+            {{if eq (printf "%s" .Direction) "inbound"}}
+            <span class="badge badge-red" style="font-size: 9px; padding: 2px 8px;">Inbound</span>
+            {{else}}
+            <span class="badge" style="font-size: 9px; padding: 2px 8px;">Outbound</span>
+            {{end}}
+        </div>
+        <div class="message-body">{{.Body}}</div>
+        <div class="message-time">{{.CreatedAt.Format "Jan 02, 2006 15:04"}}</div>
+    </div>
+    {{end}}
+</div>
+
+{{if eq (printf "%s" .Conversation.Status) "open"}}
+<form method="POST" action="/mailboxes/{{.Mailbox.PublicID}}/conversations/{{.Conversation.PublicID}}/reply" style="margin-top: 2rem;">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div class="form-group">
+        <label class="form-label">Reply</label>
+        <textarea name="body" class="form-input" rows="5" placeholder="Type your reply..." required style="resize: vertical;"></textarea>
+        <p class="form-hint">Replying as {{.Mailbox.FromAddress}}</p>
+    </div>
+    <button type="submit" class="btn-primary">Send Reply</button>
+</form>
+{{end}}
+
+<a href="/mailboxes/{{.Mailbox.PublicID}}" class="back-link">Back to {{.Mailbox.Name}}</a>
+{{end}}

@@ -44,3 +44,23 @@ func (c *SMTPClient) Send(to, subject, body string) error {
 
 	return smtp.SendMail(addr, auth, c.from, []string{to}, msg)
 }
+
+// SendFrom delivers an email using a custom from address.
+// Used for mailbox replies where the from address is the user's domain.
+func (c *SMTPClient) SendFrom(from, to, subject, body string) error {
+	addr := fmt.Sprintf("%s:%d", c.host, c.port)
+	auth := smtp.PlainAuth("", c.user, c.pass, c.host)
+
+	headers := fmt.Sprintf(
+		"From: %s\r\n"+
+			"To: %s\r\n"+
+			"Subject: %s\r\n"+
+			"MIME-Version: 1.0\r\n"+
+			"Content-Type: text/html; charset=\"UTF-8\"\r\n"+
+			"\r\n",
+		from, to, subject,
+	)
+
+	msg := []byte(headers + body)
+	return smtp.SendMail(addr, auth, from, []string{to}, msg)
+}

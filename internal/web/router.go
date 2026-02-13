@@ -21,6 +21,7 @@ type RouterDeps struct {
 	DomainHandler  *handlers.DomainHandler
 	MessageHandler *handlers.MessageHandler
 	APIHandler     *handlers.APIHandler
+	MailboxHandler *handlers.MailboxHandler
 	AuthService    *auth.Service
 	Renderer       *render.Renderer
 	Limiter        *ratelimit.Limiter
@@ -76,6 +77,17 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 
 		r.Post("/messages/{messageID}/read", deps.MessageHandler.HandleMarkRead)
 		r.Delete("/messages/{messageID}", deps.MessageHandler.HandleDeleteMessage)
+
+		// Mailbox routes
+		r.Get("/mailboxes/new", deps.MailboxHandler.ShowNewMailbox)
+		r.Post("/mailboxes", deps.MailboxHandler.HandleCreateMailbox)
+		r.Get("/mailboxes/{id}", deps.MailboxHandler.ShowMailboxDetail)
+		r.Post("/mailboxes/{id}/delete", deps.MailboxHandler.HandleDeleteMailbox)
+		r.Post("/mailboxes/{id}/streams", deps.MailboxHandler.HandleAddStream)
+		r.Post("/mailboxes/{id}/streams/{sid}/delete", deps.MailboxHandler.HandleDeleteStream)
+		r.Get("/mailboxes/{id}/conversations/{cid}", deps.MailboxHandler.ShowConversation)
+		r.Post("/mailboxes/{id}/conversations/{cid}/reply", deps.MailboxHandler.HandleReply)
+		r.Post("/mailboxes/{id}/conversations/{cid}/close", deps.MailboxHandler.HandleCloseConversation)
 	})
 
 	// Public widget API (CORS, rate limited, no CSRF)

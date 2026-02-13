@@ -12,9 +12,12 @@ import (
 
 	"github.com/znz-systems/deaddrop/internal/auth"
 	"github.com/znz-systems/deaddrop/internal/config"
+	"github.com/znz-systems/deaddrop/internal/conversation"
 	"github.com/znz-systems/deaddrop/internal/database"
 	"github.com/znz-systems/deaddrop/internal/domain"
+	"github.com/znz-systems/deaddrop/internal/inbound"
 	"github.com/znz-systems/deaddrop/internal/mail"
+	"github.com/znz-systems/deaddrop/internal/mailbox"
 	"github.com/znz-systems/deaddrop/internal/message"
 	"github.com/znz-systems/deaddrop/internal/ratelimit"
 	"github.com/znz-systems/deaddrop/internal/store/postgres"
@@ -52,19 +55,43 @@ func main() {
 	sessionStore := postgres.NewSessionStore(db)
 	domainStore := postgres.NewDomainStore(db)
 	messageStore := postgres.NewMessageStore(db)
+	mailboxStore := postgres.NewMailboxStore(db)
+	streamStore := postgres.NewStreamStore(db)
+	conversationStore := postgres.NewConversationStore(db)
 
 	// Services
 	authService := auth.NewService(userStore, sessionStore, cfg.SessionMaxAge)
-	domainService := domain.NewService(domainStore, &domain.NetResolver{})
+	var dnsResolver domain.DNSResolver
+	if cfg.DNSOverrideFile != "" {
+		r, err := domain.NewFileResolver(cfg.DNSOverrideFile)
+		if err != nil {
+			slog.Error("failed to open DNS override file", "path", cfg.DNSOverrideFile, "error", err)
+			os.Exit(1)
+		}
+		slog.Info("using file-based DNS resolver", "path", cfg.DNSOverrideFile)
+		dnsResolver = r
+	} else {
+		dnsResolver = &domain.NetResolver{}
+	}
+	domainService := domain.NewService(domainStore, dnsResolver)
 
-	var notifier message.Notifier
+	var msgNotifier message.Notifier
+	var convNotifier conversation.Notifier
+	var sender conversation.Sender
 	if cfg.SMTPEnabled {
 		smtpClient := mail.NewSMTPClient(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
-		notifier = mail.NewService(smtpClient, userStore)
+		mailService := mail.NewService(smtpClient, userStore)
+		msgNotifier = mailService
+		convNotifier = mailService
+		sender = mailService
 	} else {
-		notifier = &message.NoopNotifier{}
+		msgNotifier = &message.NoopNotifier{}
+		convNotifier = &conversation.NoopNotifier{}
+		sender = &conversation.NoopSender{}
 	}
-	messageService := message.NewService(messageStore, domainStore, notifier)
+	messageService := message.NewService(messageStore, domainStore, msgNotifier)
+	mailboxService := mailbox.NewService(mailboxStore, domainStore)
+	conversationService := conversation.NewService(conversationStore, mailboxStore, convNotifier, sender)
 
 	// Rate limiter
 	limiter := ratelimit.NewLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -76,7 +103,8 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, renderer, cfg.SecureCookies)
 	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.SecureCookies)
 	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
-	apiHandler := handlers.NewAPIHandler(messageService)
+	apiHandler := handlers.NewAPIHandler(streamStore, conversationService)
+	mailboxHandler := handlers.NewMailboxHandler(mailboxService, conversationService, domainService, streamStore, conversationStore, renderer, cfg.SecureCookies)
 
 	// Router
 	router := web.NewRouter(web.RouterDeps{
@@ -84,6 +112,7 @@ func main() {
 		DomainHandler:  domainHandler,
 		MessageHandler: messageHandler,
 		APIHandler:     apiHandler,
+		MailboxHandler: mailboxHandler,
 		AuthService:    authService,
 		Renderer:       renderer,
 		Limiter:        limiter,
@@ -102,6 +131,16 @@ func main() {
 			}
 		}
 	}()
+
+	// Inbound SMTP server
+	if cfg.InboundSMTPEnabled {
+		smtpSrv := inbound.NewServer(cfg.InboundSMTPAddr, cfg.InboundSMTPDomain, streamStore, conversationService)
+		go func() {
+			if err := smtpSrv.Start(); err != nil {
+				slog.Error("inbound SMTP server error", "error", err)
+			}
+		}()
+	}
 
 	// Server
 	addr := fmt.Sprintf(":%d", cfg.Port)

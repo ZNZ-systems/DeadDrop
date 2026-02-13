@@ -5,10 +5,14 @@ services:
       dockerfile: docker/Dockerfile
     ports:
       - "8080:8080"
+      - "25:2525"
     depends_on:
       - db
     env_file:
       - .env
+    environment:
+      INBOUND_SMTP_ADDR: ":2525"
+      INBOUND_SMTP_DOMAIN: "${SMTP_DOMAIN:-localhost}"
     restart: unless-stopped
 
   db:

@@ -7,18 +7,21 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/znz-systems/deaddrop/internal/message"
+	"github.com/znz-systems/deaddrop/internal/conversation"
+	"github.com/znz-systems/deaddrop/internal/store"
 )
 
 // APIHandler serves the public widget API.
 type APIHandler struct {
-	messages *message.Service
+	streams       store.StreamStore
+	conversations *conversation.Service
 }
 
 // NewAPIHandler creates a new APIHandler.
-func NewAPIHandler(messages *message.Service) *APIHandler {
+func NewAPIHandler(streams store.StreamStore, conversations *conversation.Service) *APIHandler {
 	return &APIHandler{
-		messages: messages,
+		streams:       streams,
+		conversations: conversations,
 	}
 }
 
@@ -26,9 +29,10 @@ func NewAPIHandler(messages *message.Service) *APIHandler {
 //
 // Expected form fields:
 //
-//	domain_id  (required, UUID)
+//	domain_id  (required, UUID — maps to stream widget_id)
 //	name       (optional)
 //	email      (optional)
+//	subject    (optional, defaults to "New message")
 //	message    (required)
 //	_gotcha    (honeypot -- if filled in, silently accept)
 func (h *APIHandler) HandleSubmitMessage(w http.ResponseWriter, r *http.Request) {
@@ -43,14 +47,14 @@ func (h *APIHandler) HandleSubmitMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// --- Validate domain_id ---
+	// --- Validate domain_id (widget_id) ---
 	domainIDRaw := r.FormValue("domain_id")
 	if domainIDRaw == "" {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "domain_id is required"})
 		return
 	}
 
-	domainPublicID, err := uuid.Parse(domainIDRaw)
+	widgetID, err := uuid.Parse(domainIDRaw)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "domain_id must be a valid UUID"})
 		return
@@ -65,18 +69,26 @@ func (h *APIHandler) HandleSubmitMessage(w http.ResponseWriter, r *http.Request)
 
 	name := r.FormValue("name")
 	email := r.FormValue("email")
+	subject := r.FormValue("subject")
+	if subject == "" {
+		subject = "New message"
+	}
 
-	// --- Submit via service ---
-	if err := h.messages.Submit(r.Context(), domainPublicID, name, email, body); err != nil {
-		switch {
-		case errors.Is(err, message.ErrDomainNotFound):
-			writeJSON(w, http.StatusNotFound, jsonResponse{Error: "domain not found"})
-		case errors.Is(err, message.ErrDomainNotVerified):
+	// --- Look up stream by widget ID ---
+	stream, err := h.streams.GetStreamByWidgetID(r.Context(), widgetID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, jsonResponse{Error: "domain not found"})
+		return
+	}
+
+	// --- Start conversation via stream ---
+	if _, err := h.conversations.StartConversation(r.Context(), stream, subject, email, name, body); err != nil {
+		if errors.Is(err, conversation.ErrStreamDisabled) {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "domain not verified"})
-		default:
-			slog.Error("failed to submit message", "domain_public_id", domainPublicID, "error", err)
-			writeJSON(w, http.StatusInternalServerError, jsonResponse{Error: "internal server error"})
+			return
 		}
+		slog.Error("failed to start conversation", "widget_id", widgetID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, jsonResponse{Error: "internal server error"})
 		return
 	}
 

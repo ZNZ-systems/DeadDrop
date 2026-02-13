@@ -1,0 +1,45 @@
+services:
+  app:
+    image: deaddrop:e2e
+    ports:
+      - "8080:8080"
+      - "25:2525"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://deaddrop:deaddrop@db:5432/deaddrop?sslmode=disable
+      SECURE_COOKIES: "false"
+      BASE_URL: http://localhost:8080
+      INBOUND_SMTP_ADDR: ":2525"
+      INBOUND_SMTP_DOMAIN: test.example.com
+      DNS_OVERRIDE_FILE: /config/dns-overrides.txt
+      RATE_LIMIT_RPS: "100"
+      RATE_LIMIT_BURST: "200"
+    volumes:
+      - ./config:/config
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: deaddrop
+      POSTGRES_PASSWORD: deaddrop
+      POSTGRES_DB: deaddrop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deaddrop"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
