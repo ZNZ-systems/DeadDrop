@@ -27,6 +27,8 @@ type Config struct {
 	InboundSMTPAddr    string
 	InboundSMTPDomain  string
 	InboundSMTPEnabled bool
+
+	DNSOverrideFile string
 }
 
 func Load() (*Config, error) {
@@ -62,6 +64,8 @@ func Load() (*Config, error) {
 	inboundAddr := getEnv("INBOUND_SMTP_ADDR", "")
 	inboundDomain := getEnv("INBOUND_SMTP_DOMAIN", "localhost")
 
+	dnsOverrideFile := getEnv("DNS_OVERRIDE_FILE", "")
+
 	return &Config{
 		Port:           port,
 		DatabaseURL:    dbURL,
@@ -79,6 +83,7 @@ func Load() (*Config, error) {
 		InboundSMTPAddr:    inboundAddr,
 		InboundSMTPDomain:  inboundDomain,
 		InboundSMTPEnabled: inboundAddr != "",
+		DNSOverrideFile:    dnsOverrideFile,
 	}, nil
 }
 

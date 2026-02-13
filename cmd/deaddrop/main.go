@@ -61,7 +61,19 @@ func main() {
 
 	// Services
 	authService := auth.NewService(userStore, sessionStore, cfg.SessionMaxAge)
-	domainService := domain.NewService(domainStore, &domain.NetResolver{})
+	var dnsResolver domain.DNSResolver
+	if cfg.DNSOverrideFile != "" {
+		r, err := domain.NewFileResolver(cfg.DNSOverrideFile)
+		if err != nil {
+			slog.Error("failed to open DNS override file", "path", cfg.DNSOverrideFile, "error", err)
+			os.Exit(1)
+		}
+		slog.Info("using file-based DNS resolver", "path", cfg.DNSOverrideFile)
+		dnsResolver = r
+	} else {
+		dnsResolver = &domain.NetResolver{}
+	}
+	domainService := domain.NewService(domainStore, dnsResolver)
 
 	var msgNotifier message.Notifier
 	var convNotifier conversation.Notifier
