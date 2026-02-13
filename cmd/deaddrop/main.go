@@ -91,7 +91,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, renderer, cfg.SecureCookies)
 	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.SecureCookies)
 	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
-	apiHandler := handlers.NewAPIHandler(messageService)
+	apiHandler := handlers.NewAPIHandler(streamStore, conversationService)
 	mailboxHandler := handlers.NewMailboxHandler(mailboxService, conversationService, domainService, streamStore, conversationStore, renderer, cfg.SecureCookies)
 
 	// Router

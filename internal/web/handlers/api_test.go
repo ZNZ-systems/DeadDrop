@@ -2,139 +2,194 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/znz-systems/deaddrop/internal/message"
+	"github.com/znz-systems/deaddrop/internal/conversation"
 	"github.com/znz-systems/deaddrop/internal/models"
 )
 
-// --- Mock stores for message.Service ---
+// --- Mock stores for API tests ---
 
-type mockMessageStore struct {
-	messages map[int64]*models.Message
-	nextID   int64
+type mockStreamStoreForAPI struct {
+	streams map[uuid.UUID]*models.Stream
 }
 
-func newMockMessageStore() *mockMessageStore {
-	return &mockMessageStore{
-		messages: make(map[int64]*models.Message),
-		nextID:   1,
+func newMockStreamStoreForAPI() *mockStreamStoreForAPI {
+	return &mockStreamStoreForAPI{
+		streams: make(map[uuid.UUID]*models.Stream),
 	}
 }
 
-func (m *mockMessageStore) CreateMessage(_ context.Context, domainID int64, senderName, senderEmail, body string) (*models.Message, error) {
-	msg := &models.Message{
-		ID:          m.nextID,
-		PublicID:    uuid.New(),
-		DomainID:    domainID,
-		SenderName:  senderName,
-		SenderEmail: senderEmail,
-		Body:        body,
-		IsRead:      false,
-		CreatedAt:   time.Now(),
-	}
-	m.nextID++
-	m.messages[msg.ID] = msg
-	return msg, nil
+func (m *mockStreamStoreForAPI) addStream(s *models.Stream) {
+	m.streams[s.WidgetID] = s
 }
 
-func (m *mockMessageStore) GetMessageByID(_ context.Context, id int64) (*models.Message, error) {
-	msg, ok := m.messages[id]
+func (m *mockStreamStoreForAPI) CreateStream(_ context.Context, _ int64, _ string, _ string, _ uuid.UUID) (*models.Stream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStreamStoreForAPI) GetStreamsByMailboxID(_ context.Context, _ int64) ([]models.Stream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStreamStoreForAPI) GetStreamByWidgetID(_ context.Context, widgetID uuid.UUID) (*models.Stream, error) {
+	s, ok := m.streams[widgetID]
 	if !ok {
 		return nil, errors.New("not found")
 	}
-	return msg, nil
+	return s, nil
 }
 
-func (m *mockMessageStore) GetMessagesByDomainID(_ context.Context, _ int64, _, _ int) ([]models.Message, error) {
+func (m *mockStreamStoreForAPI) GetStreamByAddress(_ context.Context, _ string) (*models.Stream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStreamStoreForAPI) DeleteStream(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
+}
+
+type mockConvStoreForAPI struct {
+	conversations map[int64]*models.Conversation
+	messages      map[int64][]models.ConversationMessage
+	nextID        int64
+	nextMsgID     int64
+}
+
+func newMockConvStoreForAPI() *mockConvStoreForAPI {
+	return &mockConvStoreForAPI{
+		conversations: make(map[int64]*models.Conversation),
+		messages:      make(map[int64][]models.ConversationMessage),
+		nextID:        1,
+		nextMsgID:     1,
+	}
+}
+
+func (m *mockConvStoreForAPI) CreateConversation(_ context.Context, mailboxID, streamID int64, subject string) (*models.Conversation, error) {
+	c := &models.Conversation{
+		ID:        m.nextID,
+		PublicID:  uuid.New(),
+		MailboxID: mailboxID,
+		StreamID:  streamID,
+		Subject:   subject,
+		Status:    models.ConversationOpen,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	m.nextID++
+	m.conversations[c.ID] = c
+	return c, nil
+}
+
+func (m *mockConvStoreForAPI) GetConversationByID(_ context.Context, id int64) (*models.Conversation, error) {
+	c, ok := m.conversations[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return c, nil
+}
+
+func (m *mockConvStoreForAPI) GetConversationByPublicID(_ context.Context, _ uuid.UUID) (*models.Conversation, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockConvStoreForAPI) GetConversationsByMailboxID(_ context.Context, _ int64, _, _ int) ([]models.Conversation, error) {
 	return nil, nil
 }
 
-func (m *mockMessageStore) MarkMessageRead(_ context.Context, _ int64) error { return nil }
-func (m *mockMessageStore) DeleteMessage(_ context.Context, _ int64) error   { return nil }
-func (m *mockMessageStore) CountUnreadByDomainID(_ context.Context, _ int64) (int, error) {
+func (m *mockConvStoreForAPI) UpdateConversationStatus(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
+func (m *mockConvStoreForAPI) CountOpenByMailboxID(_ context.Context, _ int64) (int, error) {
 	return 0, nil
 }
 
-type mockDomainStore struct {
-	domains map[uuid.UUID]*models.Domain
-}
-
-func newMockDomainStore() *mockDomainStore {
-	return &mockDomainStore{domains: make(map[uuid.UUID]*models.Domain)}
-}
-
-func (m *mockDomainStore) addDomain(d *models.Domain) {
-	m.domains[d.PublicID] = d
-}
-
-func (m *mockDomainStore) CreateDomain(_ context.Context, _ int64, _, _ string) (*models.Domain, error) {
-	return nil, nil
-}
-func (m *mockDomainStore) GetDomainsByUserID(_ context.Context, _ int64) ([]models.Domain, error) {
-	return nil, nil
-}
-func (m *mockDomainStore) GetDomainByID(_ context.Context, id int64) (*models.Domain, error) {
-	for _, d := range m.domains {
-		if d.ID == id {
-			return d, nil
-		}
+func (m *mockConvStoreForAPI) CreateMessage(_ context.Context, conversationID int64, direction, senderAddress, senderName, body string) (*models.ConversationMessage, error) {
+	msg := &models.ConversationMessage{
+		ID:             m.nextMsgID,
+		PublicID:       uuid.New(),
+		ConversationID: conversationID,
+		Direction:      models.MessageDirection(direction),
+		SenderAddress:  senderAddress,
+		SenderName:     senderName,
+		Body:           body,
+		CreatedAt:      time.Now(),
 	}
-	return nil, sql.ErrNoRows
+	m.nextMsgID++
+	m.messages[conversationID] = append(m.messages[conversationID], *msg)
+	return msg, nil
 }
 
-func (m *mockDomainStore) GetDomainByPublicID(_ context.Context, publicID uuid.UUID) (*models.Domain, error) {
-	d, ok := m.domains[publicID]
-	if !ok {
-		return nil, sql.ErrNoRows
-	}
-	return d, nil
+func (m *mockConvStoreForAPI) GetMessagesByConversationID(_ context.Context, conversationID int64) ([]models.ConversationMessage, error) {
+	return m.messages[conversationID], nil
 }
-func (m *mockDomainStore) GetDomainByName(_ context.Context, _ string) (*models.Domain, error) {
+
+type mockMailboxStoreForAPI struct {
+	mailboxes map[int64]*models.Mailbox
+}
+
+func newMockMailboxStoreForAPI() *mockMailboxStoreForAPI {
+	return &mockMailboxStoreForAPI{
+		mailboxes: make(map[int64]*models.Mailbox),
+	}
+}
+
+func (m *mockMailboxStoreForAPI) addMailbox(mb *models.Mailbox) {
+	m.mailboxes[mb.ID] = mb
+}
+
+func (m *mockMailboxStoreForAPI) CreateMailbox(_ context.Context, _, _ int64, _, _ string) (*models.Mailbox, error) {
 	return nil, errors.New("not implemented")
 }
-func (m *mockDomainStore) MarkDomainVerified(_ context.Context, _ int64) error { return nil }
-func (m *mockDomainStore) DeleteDomain(_ context.Context, _ int64) error       { return nil }
 
-type mockNotifier struct {
-	called atomic.Int32
+func (m *mockMailboxStoreForAPI) GetMailboxesByUserID(_ context.Context, _ int64) ([]models.Mailbox, error) {
+	return nil, errors.New("not implemented")
 }
 
-func (m *mockNotifier) NotifyNewMessage(_ context.Context, _ *models.Domain, _ *models.Message) error {
-	m.called.Add(1)
-	return nil
+func (m *mockMailboxStoreForAPI) GetMailboxByID(_ context.Context, id int64) (*models.Mailbox, error) {
+	mb, ok := m.mailboxes[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return mb, nil
+}
+
+func (m *mockMailboxStoreForAPI) GetMailboxByPublicID(_ context.Context, _ uuid.UUID) (*models.Mailbox, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockMailboxStoreForAPI) DeleteMailbox(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
 }
 
 // --- Test helpers ---
 
-func makeTestService(verifiedDomainID uuid.UUID) (*message.Service, *mockDomainStore) {
-	ms := newMockMessageStore()
-	ds := newMockDomainStore()
-	notifier := &mockNotifier{}
+func makeAPIHandler(widgetID uuid.UUID, enabled bool) *APIHandler {
+	ss := newMockStreamStoreForAPI()
+	cs := newMockConvStoreForAPI()
+	ms := newMockMailboxStoreForAPI()
+	ms.addMailbox(&models.Mailbox{ID: 1, Name: "Support", FromAddress: "support@example.com"})
 
-	if verifiedDomainID != uuid.Nil {
-		ds.addDomain(&models.Domain{
-			ID:                1,
-			PublicID:          verifiedDomainID,
-			UserID:            1,
-			Name:              "example.com",
-			VerificationToken: "tok",
-			Verified:          true,
+	if widgetID != uuid.Nil {
+		ss.addStream(&models.Stream{
+			ID:        1,
+			MailboxID: 1,
+			Type:      models.StreamTypeForm,
+			WidgetID:  widgetID,
+			Enabled:   enabled,
 		})
 	}
 
-	svc := message.NewService(ms, ds, notifier)
-	return svc, ds
+	convService := conversation.NewService(cs, ms, &conversation.NoopNotifier{}, &conversation.NoopSender{})
+	return NewAPIHandler(ss, convService)
 }
 
 func postForm(handler http.HandlerFunc, values url.Values) *httptest.ResponseRecorder {
@@ -158,12 +213,11 @@ func parseJSONResponse(t *testing.T, rr *httptest.ResponseRecorder) jsonResponse
 // --- Tests ---
 
 func TestHandleSubmitMessage_Success(t *testing.T) {
-	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	widgetID := uuid.New()
+	handler := makeAPIHandler(widgetID, true)
 
 	values := url.Values{
-		"domain_id": {domainID.String()},
+		"domain_id": {widgetID.String()},
 		"name":      {"John Doe"},
 		"email":     {"john@example.com"},
 		"message":   {"Hello, world!"},
@@ -182,8 +236,7 @@ func TestHandleSubmitMessage_Success(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_MissingDomainID(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil)
-	handler := NewAPIHandler(svc)
+	handler := makeAPIHandler(uuid.Nil, true)
 
 	values := url.Values{
 		"message": {"Hello"},
@@ -201,8 +254,7 @@ func TestHandleSubmitMessage_MissingDomainID(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_InvalidUUID(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil)
-	handler := NewAPIHandler(svc)
+	handler := makeAPIHandler(uuid.Nil, true)
 
 	values := url.Values{
 		"domain_id": {"not-a-uuid"},
@@ -221,12 +273,11 @@ func TestHandleSubmitMessage_InvalidUUID(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_MissingMessage(t *testing.T) {
-	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	widgetID := uuid.New()
+	handler := makeAPIHandler(widgetID, true)
 
 	values := url.Values{
-		"domain_id": {domainID.String()},
+		"domain_id": {widgetID.String()},
 		"name":      {"John"},
 	}
 
@@ -242,12 +293,11 @@ func TestHandleSubmitMessage_MissingMessage(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_HoneypotFilled(t *testing.T) {
-	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	widgetID := uuid.New()
+	handler := makeAPIHandler(widgetID, true)
 
 	values := url.Values{
-		"domain_id": {domainID.String()},
+		"domain_id": {widgetID.String()},
 		"message":   {"Hello"},
 		"_gotcha":   {"bot filled this in"},
 	}
@@ -263,9 +313,8 @@ func TestHandleSubmitMessage_HoneypotFilled(t *testing.T) {
 	}
 }
 
-func TestHandleSubmitMessage_DomainNotFound(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil) // no domains
-	handler := NewAPIHandler(svc)
+func TestHandleSubmitMessage_StreamNotFound(t *testing.T) {
+	handler := makeAPIHandler(uuid.Nil, true) // no streams registered
 
 	values := url.Values{
 		"domain_id": {uuid.New().String()},
@@ -277,23 +326,18 @@ func TestHandleSubmitMessage_DomainNotFound(t *testing.T) {
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", rr.Code)
 	}
+	resp := parseJSONResponse(t, rr)
+	if resp.Error != "domain not found" {
+		t.Errorf("unexpected error: %s", resp.Error)
+	}
 }
 
-func TestHandleSubmitMessage_DomainNotVerified(t *testing.T) {
-	domainID := uuid.New()
-	svc, ds := makeTestService(uuid.Nil)
-	// Add unverified domain
-	ds.addDomain(&models.Domain{
-		ID:       2,
-		PublicID: domainID,
-		UserID:   1,
-		Name:     "unverified.com",
-		Verified: false,
-	})
-	handler := NewAPIHandler(svc)
+func TestHandleSubmitMessage_StreamDisabled(t *testing.T) {
+	widgetID := uuid.New()
+	handler := makeAPIHandler(widgetID, false) // stream disabled
 
 	values := url.Values{
-		"domain_id": {domainID.String()},
+		"domain_id": {widgetID.String()},
 		"message":   {"Hello"},
 	}
 
