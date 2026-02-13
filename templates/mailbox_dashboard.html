@@ -1,0 +1,20 @@
+{{define "title"}}Mailboxes — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">Your Mailboxes</h1>
+    <a href="/mailboxes/new" class="btn-primary">New Mailbox</a>
+</div>
+
+{{if .Mailboxes}}
+<div class="list-card">
+    {{range .Mailboxes}}
+    {{template "mailbox_row" .}}
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+    <p>No mailboxes yet. Create one to start receiving conversations.</p>
+    <a href="/mailboxes/new" class="btn-outline">Create Your First Mailbox</a>
+</div>
+{{end}}
+{{end}}

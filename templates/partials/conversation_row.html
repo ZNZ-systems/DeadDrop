@@ -1,0 +1,13 @@
+{{define "conversation_row"}}
+<div class="list-item">
+    <div>
+        <span class="list-item-name">{{if .Subject}}{{.Subject}}{{else}}(no subject){{end}}</span>
+        <span class="list-item-sub" style="margin-left: 0.75rem;">{{.CreatedAt.Format "Jan 02, 15:04"}}</span>
+    </div>
+    {{if eq (printf "%s" .Status) "open"}}
+    <span class="badge">Open</span>
+    {{else}}
+    <span class="badge badge-red">Closed</span>
+    {{end}}
+</div>
+{{end}}

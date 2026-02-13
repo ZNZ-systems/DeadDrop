@@ -1,0 +1,11 @@
+{{define "mailbox_row"}}
+<a href="/mailboxes/{{.Mailbox.PublicID}}" class="list-item">
+    <div>
+        <span class="list-item-name">{{.Mailbox.Name}}</span>
+        <span class="list-item-sub" style="margin-left: 0.75rem;">{{.Mailbox.FromAddress}}</span>
+    </div>
+    {{if gt .OpenCount 0}}
+    <span class="badge-count">{{.OpenCount}} open</span>
+    {{end}}
+</a>
+{{end}}
