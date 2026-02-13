@@ -47,3 +47,12 @@ func (s *Service) NotifyNewMessage(ctx context.Context, domain *models.Domain, m
 
 	return nil
 }
+
+// SendReply sends a reply email from a mailbox. Implements conversation.Sender.
+func (s *Service) SendReply(ctx context.Context, to, fromAddress, fromName, subject, body string) error {
+	from := fromAddress
+	if fromName != "" {
+		from = fmt.Sprintf("%s <%s>", fromName, fromAddress)
+	}
+	return s.client.SendFrom(from, to, subject, body)
+}
