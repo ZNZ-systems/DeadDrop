@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="${REPO:-ZNZ-systems/DeadDrop}"
 BRANCH="${BRANCH:-master}"
-BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/docker"
+REMOTE_DOCKER_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/docker"
 INSTALL_DIR="${INSTALL_DIR:-deaddrop}"
 ENV_FILE=".env.prod"
 TOTAL_STEPS=7
@@ -132,9 +132,9 @@ configure_compose_command() {
 
 download_stack_files() {
   info "Downloading production deployment files..."
-  curl -fsSL "${BASE_URL}/docker-compose.prod.yml" -o docker-compose.prod.yml
-  curl -fsSL "${BASE_URL}/Caddyfile" -o Caddyfile
-  curl -fsSL "${BASE_URL}/.env.prod.example" -o .env.prod.example
+  curl -fsSL "${REMOTE_DOCKER_BASE_URL}/docker-compose.prod.yml" -o docker-compose.prod.yml
+  curl -fsSL "${REMOTE_DOCKER_BASE_URL}/Caddyfile" -o Caddyfile
+  curl -fsSL "${REMOTE_DOCKER_BASE_URL}/.env.prod.example" -o .env.prod.example
 }
 
 download_source_archive() {
@@ -225,6 +225,9 @@ mask_database_url() {
 
 seed_environment() {
   if [ ! -f "${ENV_FILE}" ]; then
+    if db_volume_exists; then
+      fail "Found existing DB volume '$(db_volume_name)' but no ${ENV_FILE}. This can cause password mismatch. Run: docker volume rm $(db_volume_name) (or restore your previous ${ENV_FILE}) and rerun installer."
+    fi
     cp .env.prod.example "${ENV_FILE}"
     info "Created ${ENV_FILE} from template."
   else
@@ -253,7 +256,7 @@ seed_environment() {
       ;;
   esac
 
-  base_url="${BASE_URL:-$(read_env_value BASE_URL)}"
+  base_url="${APP_BASE_URL:-${BASE_URL:-$(read_env_value BASE_URL)}}"
   if [ -z "${base_url}" ] || \
     echo "${base_url}" | grep -q '\${DOMAIN}' || \
     [ "${base_url}" = "https://${domain}" ] || \
@@ -288,6 +291,18 @@ validate_file_nonempty() {
   [ -s "$1" ]
 }
 
+compose_project_name() {
+  basename "$(pwd)"
+}
+
+db_volume_name() {
+  echo "$(compose_project_name)_pgdata"
+}
+
+db_volume_exists() {
+  "${DOCKER_CMD[@]}" volume inspect "$(db_volume_name)" >/dev/null 2>&1
+}
+
 validate_compose_file_has_local_build_context() {
   grep -qE '^[[:space:]]*context:[[:space:]]*\./src[[:space:]]*$' docker-compose.prod.yml
 }
@@ -315,6 +330,14 @@ validate_service_healthy() {
   [ -n "${cid}" ] || return 1
   status="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${cid}")"
   [ "${status}" = "healthy" ] || [ "${status}" = "running" ]
+}
+
+validate_db_app_credentials() {
+  db_user="$(read_env_value POSTGRES_USER)"
+  db_name="$(read_env_value POSTGRES_DB)"
+  db_pass="$(read_env_value POSTGRES_PASSWORD)"
+  PGPASSWORD="${db_pass}" "${COMPOSE_CMD[@]}" -f docker-compose.prod.yml --env-file "${ENV_FILE}" exec -T db \
+    psql -h 127.0.0.1 -U "${db_user}" -d "${db_name}" -c 'select 1;' >/dev/null
 }
 
 validate_app_health() {
@@ -394,6 +417,7 @@ main() {
   wait_for_db
   validate "db service is running" validate_service_running "db"
   validate "db service is healthy" validate_service_healthy "db"
+  validate "app DB credentials authenticate against Postgres" validate_db_app_credentials
 
   step "Start And Validate Full Stack" \
     "Instruction: Start app + caddy and ensure required services are running."
