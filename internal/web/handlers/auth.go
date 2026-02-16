@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/znz-systems/deaddrop/internal/auth"
@@ -30,7 +32,11 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Read flash message from cookie if present.
 	if cookie, err := r.Cookie("flash"); err == nil {
-		data["flash"] = cookie.Value
+		message, flashType := parseFlashCookieValue(cookie.Value)
+		if message != "" {
+			data["Flash"] = message
+			data["FlashType"] = flashType
+		}
 		// Clear the flash cookie.
 		http.SetCookie(w, &http.Cookie{
 			Name:     "flash",
@@ -48,7 +54,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 // HandleLogin processes the login form submission.
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.", h.secureCookies)
+		setFlashError(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -58,7 +64,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Invalid email or password.", h.secureCookies)
+		setFlashError(w, "Invalid email or password.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -82,7 +88,11 @@ func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 
 	// Read flash message from cookie if present.
 	if cookie, err := r.Cookie("flash"); err == nil {
-		data["flash"] = cookie.Value
+		message, flashType := parseFlashCookieValue(cookie.Value)
+		if message != "" {
+			data["Flash"] = message
+			data["FlashType"] = flashType
+		}
 		// Clear the flash cookie.
 		http.SetCookie(w, &http.Cookie{
 			Name:     "flash",
@@ -100,7 +110,7 @@ func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 // HandleSignup processes the signup form submission.
 func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.", h.secureCookies)
+		setFlashError(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -110,14 +120,14 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	passwordConfirm := r.FormValue("password_confirm")
 
 	if password != passwordConfirm {
-		setFlash(w, "Passwords do not match.", h.secureCookies)
+		setFlashError(w, "Passwords do not match.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
 
 	_, err := h.auth.Signup(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, err.Error(), h.secureCookies)
+		setFlashError(w, err.Error(), h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -125,7 +135,7 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	// Auto-login after successful signup.
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Account created. Please log in.", h.secureCookies)
+		setFlashSuccess(w, "Account created. Please log in.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -167,11 +177,50 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 
 // setFlash sets a flash message cookie for the next request.
 func setFlash(w http.ResponseWriter, message string, secure bool) {
+	setFlashWithType(w, "success", message, secure)
+}
+
+func setFlashError(w http.ResponseWriter, message string, secure bool) {
+	setFlashWithType(w, "error", message, secure)
+}
+
+func setFlashSuccess(w http.ResponseWriter, message string, secure bool) {
+	setFlashWithType(w, "success", message, secure)
+}
+
+func setFlashWithType(w http.ResponseWriter, flashType, message string, secure bool) {
+	if strings.TrimSpace(message) == "" {
+		return
+	}
+	if flashType != "error" && flashType != "success" {
+		flashType = "success"
+	}
+	value := url.QueryEscape(flashType + "|" + message)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "flash",
-		Value:    message,
+		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func parseFlashCookieValue(raw string) (message, flashType string) {
+	decoded, err := url.QueryUnescape(raw)
+	if err != nil {
+		decoded = raw
+	}
+	parts := strings.SplitN(decoded, "|", 2)
+	if len(parts) == 2 {
+		flashType = strings.TrimSpace(parts[0])
+		message = strings.TrimSpace(parts[1])
+	} else {
+		flashType = "error"
+		message = strings.TrimSpace(decoded)
+	}
+	if flashType != "error" && flashType != "success" {
+		flashType = "success"
+	}
+	return message, flashType
 }
