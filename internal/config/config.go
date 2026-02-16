@@ -22,7 +22,18 @@ type Config struct {
 	APIMaxBodyBytes        int64
 	InboundAPIToken        string
 	InboundAPIMaxBodyBytes int64
+	InboundJobMaxAttempts  int
+	InboundWorkerPollMS    int
 	InboundMXTarget        string
+
+	BlobBackend           string
+	BlobFSRoot            string
+	BlobS3Bucket          string
+	BlobS3Region          string
+	BlobS3Endpoint        string
+	BlobS3AccessKeyID     string
+	BlobS3SecretAccessKey string
+	BlobS3ForcePathStyle  bool
 
 	SessionMaxAge int // hours
 	BaseURL       string
@@ -60,6 +71,14 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid INBOUND_API_MAX_BODY_BYTES: %w", err)
 	}
+	inboundJobMaxAttempts, err := getIntEnv("INBOUND_JOB_MAX_ATTEMPTS", 5)
+	if err != nil {
+		return nil, fmt.Errorf("invalid INBOUND_JOB_MAX_ATTEMPTS: %w", err)
+	}
+	inboundWorkerPollMS, err := getIntEnv("INBOUND_WORKER_POLL_MS", 500)
+	if err != nil {
+		return nil, fmt.Errorf("invalid INBOUND_WORKER_POLL_MS: %w", err)
+	}
 
 	sessionMaxAge, err := getIntEnv("SESSION_MAX_AGE_HOURS", 72)
 	if err != nil {
@@ -82,7 +101,17 @@ func Load() (*Config, error) {
 		APIMaxBodyBytes:        apiMaxBodyBytes,
 		InboundAPIToken:        getEnv("INBOUND_API_TOKEN", ""),
 		InboundAPIMaxBodyBytes: inboundAPIMaxBodyBytes,
+		InboundJobMaxAttempts:  inboundJobMaxAttempts,
+		InboundWorkerPollMS:    inboundWorkerPollMS,
 		InboundMXTarget:        getEnv("INBOUND_MX_TARGET", "mx.deaddrop.local"),
+		BlobBackend:            getEnv("BLOB_BACKEND", "filesystem"),
+		BlobFSRoot:             getEnv("BLOB_FS_ROOT", "./data/blobs"),
+		BlobS3Bucket:           getEnv("BLOB_S3_BUCKET", ""),
+		BlobS3Region:           getEnv("BLOB_S3_REGION", "auto"),
+		BlobS3Endpoint:         getEnv("BLOB_S3_ENDPOINT", ""),
+		BlobS3AccessKeyID:      getEnv("BLOB_S3_ACCESS_KEY_ID", ""),
+		BlobS3SecretAccessKey:  getEnv("BLOB_S3_SECRET_ACCESS_KEY", ""),
+		BlobS3ForcePathStyle:   getBoolEnv("BLOB_S3_FORCE_PATH_STYLE", false),
 		SessionMaxAge:          sessionMaxAge,
 		BaseURL:                getEnv("BASE_URL", "http://localhost:8080"),
 		SecureCookies:          getEnv("SECURE_COOKIES", "true") != "false",
@@ -118,4 +147,16 @@ func getInt64Env(key string, fallback int64) (int64, error) {
 		return fallback, nil
 	}
 	return strconv.ParseInt(v, 10, 64)
+}
+
+func getBoolEnv(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

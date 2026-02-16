@@ -88,14 +88,23 @@ type InboundEmailAttachment struct {
 	FileName       string
 	ContentType    string
 	SizeBytes      int64
+	BlobKey        string
 	Content        []byte
 	CreatedAt      time.Time
+}
+
+type InboundEmailRawCreateParams struct {
+	InboundEmailID int64
+	RawSource      string
+	BlobKey        string
 }
 
 type InboundEmailAttachmentCreateParams struct {
 	InboundEmailID int64
 	FileName       string
 	ContentType    string
+	SizeBytes      int64
+	BlobKey        string
 	Content        []byte
 }
 
@@ -118,4 +127,20 @@ type InboundRecipientRule struct {
 	IsActive  bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type InboundIngestJob struct {
+	ID          int64
+	Status      string
+	Payload     []byte
+	Attempts    int
+	MaxAttempts int
+	AvailableAt time.Time
+	LockedAt    *time.Time
+	LastError   string
+	Accepted    int
+	Dropped     int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DoneAt      *time.Time
 }

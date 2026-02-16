@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/znz-systems/deaddrop/internal/auth"
+	"github.com/znz-systems/deaddrop/internal/blob"
 	"github.com/znz-systems/deaddrop/internal/config"
 	"github.com/znz-systems/deaddrop/internal/database"
 	"github.com/znz-systems/deaddrop/internal/domain"
@@ -56,6 +57,22 @@ func main() {
 	inboundEmailStore := postgres.NewInboundEmailStore(db)
 	inboundDomainConfigStore := postgres.NewInboundDomainConfigStore(db)
 	inboundRuleStore := postgres.NewInboundRecipientRuleStore(db)
+	inboundJobStore := postgres.NewInboundIngestJobStore(db)
+
+	blobStore, err := blob.NewFromConfig(context.Background(), blob.Config{
+		Backend:           cfg.BlobBackend,
+		FSRoot:            cfg.BlobFSRoot,
+		S3Bucket:          cfg.BlobS3Bucket,
+		S3Region:          cfg.BlobS3Region,
+		S3Endpoint:        cfg.BlobS3Endpoint,
+		S3AccessKeyID:     cfg.BlobS3AccessKeyID,
+		S3SecretAccessKey: cfg.BlobS3SecretAccessKey,
+		S3ForcePathStyle:  cfg.BlobS3ForcePathStyle,
+	})
+	if err != nil {
+		slog.Error("failed to initialize blob store", "backend", cfg.BlobBackend, "error", err)
+		os.Exit(1)
+	}
 
 	// Services
 	authService := auth.NewService(userStore, sessionStore, cfg.SessionMaxAge)
@@ -70,7 +87,10 @@ func main() {
 	}
 	messageService := message.NewService(messageStore, domainStore, notifier)
 	inboundDomainService := inbound.NewDomainService(inboundDomainConfigStore, &inbound.NetMXResolver{}, cfg.InboundMXTarget)
-	inboundService := inbound.NewService(domainStore, inboundEmailStore, inboundDomainConfigStore, inboundRuleStore)
+	inboundService := inbound.NewService(domainStore, inboundEmailStore, inboundDomainConfigStore, inboundRuleStore, blobStore)
+	inboundWorker := inbound.NewWorker(inboundJobStore, inboundService, inbound.WorkerOptions{
+		PollInterval: time.Duration(cfg.InboundWorkerPollMS) * time.Millisecond,
+	})
 
 	// Rate limiter
 	limiter := ratelimit.NewLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -84,8 +104,8 @@ func main() {
 	inboundDomainHandler := handlers.NewInboundDomainHandler(domainService, inboundDomainService, inboundRuleStore, renderer, cfg.SecureCookies)
 	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
 	apiHandler := handlers.NewAPIHandler(messageService, domainStore, cfg.APIMaxBodyBytes)
-	inboxHandler := handlers.NewInboxHandler(inboundEmailStore, renderer, cfg.SecureCookies)
-	inboundAPIHandler := handlers.NewInboundAPIHandler(inboundService, cfg.InboundAPIToken, cfg.InboundAPIMaxBodyBytes)
+	inboxHandler := handlers.NewInboxHandler(inboundEmailStore, blobStore, renderer, cfg.SecureCookies)
+	inboundAPIHandler := handlers.NewInboundAPIHandler(inboundJobStore, cfg.InboundAPIToken, cfg.InboundAPIMaxBodyBytes, cfg.InboundJobMaxAttempts)
 
 	// Router
 	router := web.NewRouter(web.RouterDeps{
@@ -105,6 +125,9 @@ func main() {
 	})
 
 	// Session cleanup goroutine
+	appCtx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -114,6 +137,8 @@ func main() {
 			}
 		}
 	}()
+
+	go inboundWorker.Run(appCtx)
 
 	// Server
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -139,6 +164,7 @@ func main() {
 
 	<-done
 	slog.Info("shutting down...")
+	cancelApp()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

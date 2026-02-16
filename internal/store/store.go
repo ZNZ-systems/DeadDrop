@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/znz-systems/deaddrop/internal/models"
@@ -44,7 +45,7 @@ type InboundEmailStore interface {
 	ListInboundEmailsByUserID(ctx context.Context, userID int64, limit, offset int) ([]models.InboundEmail, error)
 	SearchInboundEmailsByUserID(ctx context.Context, userID int64, query models.InboundEmailQuery) ([]models.InboundEmail, error)
 	GetInboundEmailByID(ctx context.Context, id int64) (*models.InboundEmail, error)
-	CreateInboundEmailRaw(ctx context.Context, inboundEmailID int64, rawSource string) error
+	CreateInboundEmailRaw(ctx context.Context, params models.InboundEmailRawCreateParams) error
 	CreateInboundEmailAttachment(ctx context.Context, params models.InboundEmailAttachmentCreateParams) (*models.InboundEmailAttachment, error)
 	ListInboundEmailAttachmentsByEmailID(ctx context.Context, inboundEmailID int64) ([]models.InboundEmailAttachment, error)
 	GetInboundEmailAttachmentByID(ctx context.Context, attachmentID int64) (*models.InboundEmailAttachment, error)
@@ -62,4 +63,12 @@ type InboundRecipientRuleStore interface {
 	CreateInboundRecipientRule(ctx context.Context, domainID int64, ruleType, pattern, action string) (*models.InboundRecipientRule, error)
 	ListInboundRecipientRulesByDomainID(ctx context.Context, domainID int64) ([]models.InboundRecipientRule, error)
 	DeleteInboundRecipientRule(ctx context.Context, domainID, ruleID int64) error
+}
+
+type InboundIngestJobStore interface {
+	EnqueueInboundIngestJob(ctx context.Context, payload []byte, maxAttempts int) (*models.InboundIngestJob, error)
+	ClaimNextInboundIngestJob(ctx context.Context) (*models.InboundIngestJob, error)
+	MarkInboundIngestJobDone(ctx context.Context, jobID int64, accepted, dropped int) error
+	MarkInboundIngestJobRetry(ctx context.Context, jobID int64, nextAvailableAt time.Time, lastError string) error
+	MarkInboundIngestJobFailed(ctx context.Context, jobID int64, lastError string) error
 }

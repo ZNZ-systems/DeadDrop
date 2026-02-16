@@ -6,27 +6,30 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/znz-systems/deaddrop/internal/inbound"
+	"github.com/znz-systems/deaddrop/internal/store"
 )
 
 const defaultInboundAPIMaxBodyBytes int64 = 1024 * 1024
 
 type InboundAPIHandler struct {
-	service            *inbound.Service
-	apiToken           string
-	maxBodyBytes       int64
-	maxAttachmentBytes int64
+	jobs         store.InboundIngestJobStore
+	apiToken     string
+	maxBodyBytes int64
+	maxAttempts  int
 }
 
-func NewInboundAPIHandler(service *inbound.Service, apiToken string, maxBodyBytes int64) *InboundAPIHandler {
+func NewInboundAPIHandler(jobs store.InboundIngestJobStore, apiToken string, maxBodyBytes int64, maxAttempts int) *InboundAPIHandler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = defaultInboundAPIMaxBodyBytes
 	}
+	if maxAttempts <= 0 {
+		maxAttempts = 5
+	}
 	return &InboundAPIHandler{
-		service:            service,
-		apiToken:           strings.TrimSpace(apiToken),
-		maxBodyBytes:       maxBodyBytes,
-		maxAttachmentBytes: 5 * 1024 * 1024,
+		jobs:         jobs,
+		apiToken:     strings.TrimSpace(apiToken),
+		maxBodyBytes: maxBodyBytes,
+		maxAttempts:  maxAttempts,
 	}
 }
 
@@ -41,16 +44,7 @@ func (h *InboundAPIHandler) HandleReceiveEmail(w http.ResponseWriter, r *http.Re
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
-	var payload struct {
-		Sender     string   `json:"sender"`
-		Recipients []string `json:"recipients"`
-		Subject    string   `json:"subject"`
-		TextBody   string   `json:"text_body"`
-		HTMLBody   string   `json:"html_body"`
-		MessageID  string   `json:"message_id"`
-		RawRFC822  string   `json:"raw_rfc822"`
-	}
-
+	var payload map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
@@ -61,59 +55,45 @@ func (h *InboundAPIHandler) HandleReceiveEmail(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	msg := inbound.Message{
-		Sender:     payload.Sender,
-		Recipients: payload.Recipients,
-		Subject:    payload.Subject,
-		TextBody:   payload.TextBody,
-		HTMLBody:   payload.HTMLBody,
-		MessageID:  payload.MessageID,
-		RawRFC822:  payload.RawRFC822,
-	}
-	if strings.TrimSpace(payload.RawRFC822) != "" {
-		parsed, parseErr := inbound.ParseRFC822(payload.RawRFC822, h.maxAttachmentBytes)
-		if parseErr != nil {
-			writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "invalid raw_rfc822: " + parseErr.Error()})
-			return
-		}
-		if strings.TrimSpace(msg.Sender) == "" {
-			msg.Sender = parsed.Sender
-		}
-		if len(msg.Recipients) == 0 {
-			msg.Recipients = parsed.Recipients
-		}
-		if strings.TrimSpace(msg.Subject) == "" {
-			msg.Subject = parsed.Subject
-		}
-		if strings.TrimSpace(msg.TextBody) == "" {
-			msg.TextBody = parsed.TextBody
-		}
-		if strings.TrimSpace(msg.HTMLBody) == "" {
-			msg.HTMLBody = parsed.HTMLBody
-		}
-		if strings.TrimSpace(msg.MessageID) == "" {
-			msg.MessageID = parsed.MessageID
-		}
-		msg.Attachments = parsed.Attachments
+	sender, _ := payload["sender"].(string)
+	rawRFC822, _ := payload["raw_rfc822"].(string)
+	if strings.TrimSpace(rawRFC822) == "" && strings.TrimSpace(sender) == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "sender is required when raw_rfc822 is missing"})
+		return
 	}
 
-	result, err := h.service.Ingest(r.Context(), msg)
-	if err != nil {
-		switch {
-		case errors.Is(err, inbound.ErrSenderRequired), errors.Is(err, inbound.ErrRecipientsRequired):
-			writeJSON(w, http.StatusBadRequest, jsonResponse{Error: err.Error()})
-		default:
-			writeJSON(w, http.StatusBadRequest, jsonResponse{Error: err.Error()})
+	recipientsUsable := false
+	if recipientsRaw, ok := payload["recipients"].([]interface{}); ok {
+		for _, entry := range recipientsRaw {
+			if s, ok := entry.(string); ok && strings.TrimSpace(s) != "" {
+				recipientsUsable = true
+				break
+			}
 		}
+	}
+	if strings.TrimSpace(rawRFC822) == "" && !recipientsUsable {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "at least one recipient is required when raw_rfc822 is missing"})
+		return
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Error: "invalid JSON payload"})
+		return
+	}
+
+	job, err := h.jobs.EnqueueInboundIngestJob(r.Context(), encoded, h.maxAttempts)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, jsonResponse{Error: "failed to enqueue inbound message"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":       true,
-		"accepted": result.Accepted,
-		"dropped":  result.Dropped,
+		"ok":     true,
+		"job_id": job.ID,
+		"status": job.Status,
 	})
 }
 

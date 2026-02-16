@@ -126,12 +126,14 @@ func (s *InboundEmailStore) GetInboundEmailByID(ctx context.Context, id int64) (
 	return scanInboundEmail(row)
 }
 
-func (s *InboundEmailStore) CreateInboundEmailRaw(ctx context.Context, inboundEmailID int64, rawSource string) error {
+func (s *InboundEmailStore) CreateInboundEmailRaw(ctx context.Context, params models.InboundEmailRawCreateParams) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO inbound_email_raws (inbound_email_id, raw_source)
-		 VALUES ($1, $2)
-		 ON CONFLICT (inbound_email_id) DO UPDATE SET raw_source = EXCLUDED.raw_source`,
-		inboundEmailID, rawSource,
+		`INSERT INTO inbound_email_raws (inbound_email_id, raw_source, blob_key)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (inbound_email_id) DO UPDATE
+		 SET raw_source = EXCLUDED.raw_source,
+		     blob_key = EXCLUDED.blob_key`,
+		params.InboundEmailID, params.RawSource, strings.TrimSpace(params.BlobKey),
 	)
 	return err
 }
@@ -141,8 +143,12 @@ func (s *InboundEmailStore) CreateInboundEmailAttachment(ctx context.Context, pa
 		InboundEmailID: params.InboundEmailID,
 		FileName:       strings.TrimSpace(params.FileName),
 		ContentType:    strings.TrimSpace(params.ContentType),
+		BlobKey:        strings.TrimSpace(params.BlobKey),
 		Content:        params.Content,
-		SizeBytes:      int64(len(params.Content)),
+		SizeBytes:      params.SizeBytes,
+	}
+	if attachment.SizeBytes <= 0 {
+		attachment.SizeBytes = int64(len(params.Content))
 	}
 	if attachment.FileName == "" {
 		attachment.FileName = "attachment"
@@ -152,10 +158,10 @@ func (s *InboundEmailStore) CreateInboundEmailAttachment(ctx context.Context, pa
 	}
 
 	err := s.db.QueryRowContext(ctx,
-		`INSERT INTO inbound_email_attachments (inbound_email_id, file_name, content_type, size_bytes, content)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO inbound_email_attachments (inbound_email_id, file_name, content_type, size_bytes, blob_key, content)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, created_at`,
-		attachment.InboundEmailID, attachment.FileName, attachment.ContentType, attachment.SizeBytes, attachment.Content,
+		attachment.InboundEmailID, attachment.FileName, attachment.ContentType, attachment.SizeBytes, attachment.BlobKey, attachment.Content,
 	).Scan(&attachment.ID, &attachment.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -165,7 +171,7 @@ func (s *InboundEmailStore) CreateInboundEmailAttachment(ctx context.Context, pa
 
 func (s *InboundEmailStore) ListInboundEmailAttachmentsByEmailID(ctx context.Context, inboundEmailID int64) ([]models.InboundEmailAttachment, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, inbound_email_id, file_name, content_type, size_bytes, created_at
+		`SELECT id, inbound_email_id, file_name, content_type, size_bytes, blob_key, created_at
 		 FROM inbound_email_attachments
 		 WHERE inbound_email_id = $1
 		 ORDER BY id ASC`,
@@ -179,7 +185,7 @@ func (s *InboundEmailStore) ListInboundEmailAttachmentsByEmailID(ctx context.Con
 	attachments := make([]models.InboundEmailAttachment, 0, 8)
 	for rows.Next() {
 		var a models.InboundEmailAttachment
-		if err := rows.Scan(&a.ID, &a.InboundEmailID, &a.FileName, &a.ContentType, &a.SizeBytes, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.InboundEmailID, &a.FileName, &a.ContentType, &a.SizeBytes, &a.BlobKey, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		attachments = append(attachments, a)
@@ -190,11 +196,11 @@ func (s *InboundEmailStore) ListInboundEmailAttachmentsByEmailID(ctx context.Con
 func (s *InboundEmailStore) GetInboundEmailAttachmentByID(ctx context.Context, attachmentID int64) (*models.InboundEmailAttachment, error) {
 	var a models.InboundEmailAttachment
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, inbound_email_id, file_name, content_type, size_bytes, content, created_at
+		`SELECT id, inbound_email_id, file_name, content_type, size_bytes, blob_key, content, created_at
 		 FROM inbound_email_attachments
 		 WHERE id = $1`,
 		attachmentID,
-	).Scan(&a.ID, &a.InboundEmailID, &a.FileName, &a.ContentType, &a.SizeBytes, &a.Content, &a.CreatedAt)
+	).Scan(&a.ID, &a.InboundEmailID, &a.FileName, &a.ContentType, &a.SizeBytes, &a.BlobKey, &a.Content, &a.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -75,7 +75,7 @@ func (m *mockInboundEmailStore) SearchInboundEmailsByUserID(_ context.Context, _
 func (m *mockInboundEmailStore) GetInboundEmailByID(_ context.Context, _ int64) (*models.InboundEmail, error) {
 	return nil, errors.New("not implemented")
 }
-func (m *mockInboundEmailStore) CreateInboundEmailRaw(_ context.Context, _ int64, _ string) error {
+func (m *mockInboundEmailStore) CreateInboundEmailRaw(_ context.Context, _ models.InboundEmailRawCreateParams) error {
 	return nil
 }
 func (m *mockInboundEmailStore) CreateInboundEmailAttachment(_ context.Context, _ models.InboundEmailAttachmentCreateParams) (*models.InboundEmailAttachment, error) {
@@ -193,7 +193,7 @@ func TestIngest_RoutesToVerifiedDomain(t *testing.T) {
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
-	svc := NewService(ds, es, cs, rs)
+	svc := NewService(ds, es, cs, rs, nil)
 
 	res, err := svc.Ingest(context.Background(), Message{
 		Sender:     "sender@outside.com",
@@ -221,7 +221,7 @@ func TestIngest_DropsUnknownDomain(t *testing.T) {
 	es := &mockInboundEmailStore{}
 	cs := newMockInboundDomainConfigStore()
 	rs := newMockInboundRuleStore()
-	svc := NewService(ds, es, cs, rs)
+	svc := NewService(ds, es, cs, rs, nil)
 
 	res, err := svc.Ingest(context.Background(), Message{
 		Sender:     "sender@outside.com",
@@ -240,7 +240,7 @@ func TestIngest_RequiresSender(t *testing.T) {
 	es := &mockInboundEmailStore{}
 	cs := newMockInboundDomainConfigStore()
 	rs := newMockInboundRuleStore()
-	svc := NewService(ds, es, cs, rs)
+	svc := NewService(ds, es, cs, rs, nil)
 
 	_, err := svc.Ingest(context.Background(), Message{
 		Recipients: []string{"ideas@example.com"},

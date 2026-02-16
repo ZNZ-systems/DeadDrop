@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/znz-systems/deaddrop/internal/blob"
 	"github.com/znz-systems/deaddrop/internal/models"
 	"github.com/znz-systems/deaddrop/internal/store"
 	"github.com/znz-systems/deaddrop/internal/web/middleware"
@@ -19,13 +20,15 @@ import (
 
 type InboxHandler struct {
 	emails        store.InboundEmailStore
+	blobs         blob.Store
 	render        *render.Renderer
 	secureCookies bool
 }
 
-func NewInboxHandler(emails store.InboundEmailStore, r *render.Renderer, secureCookies bool) *InboxHandler {
+func NewInboxHandler(emails store.InboundEmailStore, blobs blob.Store, r *render.Renderer, secureCookies bool) *InboxHandler {
 	return &InboxHandler{
 		emails:        emails,
+		blobs:         blobs,
 		render:        r,
 		secureCookies: secureCookies,
 	}
@@ -181,6 +184,24 @@ func (h *InboxHandler) HandleDownloadAttachment(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	content := attachment.Content
+	if strings.TrimSpace(attachment.BlobKey) != "" && h.blobs != nil {
+		body, err := h.blobs.Get(r.Context(), attachment.BlobKey)
+		if err != nil {
+			slog.Warn("failed to fetch attachment blob", "attachment_id", attachment.ID, "blob_key", attachment.BlobKey, "error", err)
+			if len(content) == 0 {
+				http.Error(w, "attachment unavailable", http.StatusNotFound)
+				return
+			}
+		} else {
+			content = body
+		}
+	}
+	if len(content) == 0 {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+
 	contentType := attachment.ContentType
 	if strings.TrimSpace(contentType) == "" {
 		contentType = "application/octet-stream"
@@ -192,9 +213,9 @@ func (h *InboxHandler) HandleDownloadAttachment(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(attachment.Content)), 10))
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(content)), 10))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(attachment.Content)
+	_, _ = w.Write(content)
 }
 
 func (h *InboxHandler) HandleSearchAPI(w http.ResponseWriter, r *http.Request) {

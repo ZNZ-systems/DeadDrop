@@ -8,8 +8,11 @@ import (
 	"net/mail"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/znz-systems/deaddrop/internal/blob"
 	"github.com/znz-systems/deaddrop/internal/models"
 	"github.com/znz-systems/deaddrop/internal/store"
 )
@@ -46,14 +49,16 @@ type Service struct {
 	emails  store.InboundEmailStore
 	configs store.InboundDomainConfigStore
 	rules   store.InboundRecipientRuleStore
+	blobs   blob.Store
 }
 
-func NewService(domains store.DomainStore, emails store.InboundEmailStore, configs store.InboundDomainConfigStore, rules store.InboundRecipientRuleStore) *Service {
+func NewService(domains store.DomainStore, emails store.InboundEmailStore, configs store.InboundDomainConfigStore, rules store.InboundRecipientRuleStore, blobs blob.Store) *Service {
 	return &Service{
 		domains: domains,
 		emails:  emails,
 		configs: configs,
 		rules:   rules,
+		blobs:   blobs,
 	}
 }
 
@@ -156,7 +161,19 @@ func (s *Service) Ingest(ctx context.Context, msg Message) (IngestResult, error)
 		}
 
 		if msg.RawRFC822 != "" {
-			if err := s.emails.CreateInboundEmailRaw(ctx, email.ID, msg.RawRFC822); err != nil {
+			rawParams := models.InboundEmailRawCreateParams{
+				InboundEmailID: email.ID,
+				RawSource:      msg.RawRFC822,
+			}
+			if s.blobs != nil {
+				rawKey := buildBlobKey("raw", domain.ID, email.ID, "eml")
+				if err := s.blobs.Put(ctx, rawKey, "message/rfc822", []byte(msg.RawRFC822)); err != nil {
+					return res, fmt.Errorf("store inbound raw blob: %w", err)
+				}
+				rawParams.RawSource = ""
+				rawParams.BlobKey = rawKey
+			}
+			if err := s.emails.CreateInboundEmailRaw(ctx, rawParams); err != nil {
 				return res, fmt.Errorf("store inbound raw email: %w", err)
 			}
 		}
@@ -164,12 +181,23 @@ func (s *Service) Ingest(ctx context.Context, msg Message) (IngestResult, error)
 			if len(attachment.Content) == 0 {
 				continue
 			}
-			if _, err := s.emails.CreateInboundEmailAttachment(ctx, models.InboundEmailAttachmentCreateParams{
+			attachmentParams := models.InboundEmailAttachmentCreateParams{
 				InboundEmailID: email.ID,
 				FileName:       attachment.FileName,
 				ContentType:    attachment.ContentType,
+				SizeBytes:      int64(len(attachment.Content)),
 				Content:        attachment.Content,
-			}); err != nil {
+			}
+			if s.blobs != nil {
+				ext := blobExtFromName(attachment.FileName)
+				blobKey := buildBlobKey("attachments", domain.ID, email.ID, ext)
+				if err := s.blobs.Put(ctx, blobKey, attachment.ContentType, attachment.Content); err != nil {
+					return res, fmt.Errorf("store inbound attachment blob: %w", err)
+				}
+				attachmentParams.BlobKey = blobKey
+				attachmentParams.Content = nil
+			}
+			if _, err := s.emails.CreateInboundEmailAttachment(ctx, attachmentParams); err != nil {
 				return res, fmt.Errorf("store inbound attachment: %w", err)
 			}
 		}
@@ -177,6 +205,37 @@ func (s *Service) Ingest(ctx context.Context, msg Message) (IngestResult, error)
 	}
 
 	return res, nil
+}
+
+func buildBlobKey(kind string, domainID, emailID int64, extension string) string {
+	extension = strings.TrimSpace(strings.TrimPrefix(extension, "."))
+	if extension == "" {
+		extension = "bin"
+	}
+	return fmt.Sprintf("inbound/%s/%d/%d/%d-%s.%s",
+		kind,
+		domainID,
+		emailID,
+		time.Now().UTC().UnixNano(),
+		uuid.NewString(),
+		extension,
+	)
+}
+
+func blobExtFromName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "bin"
+	}
+	lastDot := strings.LastIndex(name, ".")
+	if lastDot == -1 || lastDot == len(name)-1 {
+		return "bin"
+	}
+	ext := strings.TrimSpace(name[lastDot+1:])
+	if ext == "" {
+		return "bin"
+	}
+	return ext
 }
 
 func normalizeRecipient(email string) (domain string, normalized string) {

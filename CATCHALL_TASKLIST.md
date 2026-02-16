@@ -11,7 +11,8 @@ Goal: provide a production-ready catch-all inbox for many domains without buying
 
 ## Launch Blockers (Must-Haves Before Public Launch)
 - [ ] Move raw email + attachments to durable object storage (S3/R2) and enforce retention/quotas.
-- [ ] Add async ingest/parse pipeline with retry + dead-letter queue (remove parse work from request path).
+  - Partial: object storage backend is implemented (filesystem + S3-compatible); retention/quotas are still pending.
+- [x] Add async ingest/parse pipeline with retry + dead-letter queue (remove parse work from request path).
 - [ ] Add abuse/auth signals: SPF, DKIM, DMARC capture + sender/domain/IP rate limits.
 - [ ] Add spam/malware controls and suspicious-email labeling in inbox.
 - [ ] Add production observability: metrics, alerts, structured logs, runbooks.
