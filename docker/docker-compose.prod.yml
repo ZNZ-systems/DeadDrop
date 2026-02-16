@@ -8,24 +8,25 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
-    environment:
-      - DOMAIN=${DOMAIN}
+    env_file:
+      - .env.prod
     depends_on:
       app:
         condition: service_healthy
     restart: unless-stopped
 
   app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: ghcr.io/znz-systems/deaddrop:latest
     env_file:
       - .env.prod
+    ports:
+      - "25:2525"
     environment:
       - SECURE_COOKIES=true
       - BASE_URL=https://${DOMAIN}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s
@@ -36,10 +37,14 @@ services:
 
   db:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    env_file:
+      - .env.prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
