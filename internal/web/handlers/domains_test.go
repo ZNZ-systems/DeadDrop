@@ -46,7 +46,7 @@ func setupDomainTestRouter(userA, userB *models.User) (*chi.Mux, *models.Domain)
 	ds.addDomain(domainB)
 
 	domainSvc := domain.NewService(ds, &testResolver{})
-	handler := NewDomainHandler(domainSvc, ms, nil, false) // nil renderer: IDOR check triggers before render
+	handler := NewDomainHandler(domainSvc, ms, nil, "", false) // nil renderer: IDOR check triggers before render
 
 	r := chi.NewRouter()
 	r.Use(injectUser(userA)) // all requests as user A

@@ -1,0 +1,61 @@
+{{define "title"}}Inbox — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">Catch-All Inbox</h1>
+</div>
+
+<div class="info-panel" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="/inbox">
+        <div class="form-group">
+            <label class="form-label" for="q">Search</label>
+            <input id="q" name="q" class="form-input" placeholder="sender or subject" value="{{.Query.Q}}">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="domain">Domain</label>
+            <input id="domain" name="domain" class="form-input" placeholder="example.com" value="{{.Query.Domain}}">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="from">From Date</label>
+            <input id="from" name="from" type="date" class="form-input">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="to">To Date</label>
+            <input id="to" name="to" type="date" class="form-input">
+            <p class="form-hint">Inclusive date range</p>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="unread">Unread Only</label>
+            <select id="unread" name="unread" class="form-input">
+                <option value="0">No</option>
+                <option value="1" {{if .Query.UnreadOnly}}selected{{end}}>Yes</option>
+            </select>
+        </div>
+        <div class="flex-between gap-1">
+            <button type="submit" class="btn-primary btn-sm">Apply Filters</button>
+            <a href="/inbox" class="btn-outline btn-sm">Reset</a>
+        </div>
+    </form>
+</div>
+
+{{if .Emails}}
+<div class="list-card">
+    {{range .Emails}}
+    <a href="/inbox/{{.ID}}" class="list-item">
+        <div>
+            <span class="list-item-name">{{if .Subject}}{{.Subject}}{{else}}(no subject){{end}}</span>
+            <div class="list-item-sub" style="margin-top: 0.35rem;">
+                {{.Sender}} → {{.Recipient}} · {{.DomainName}} · {{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}
+            </div>
+        </div>
+        {{if not .IsRead}}
+        <span class="badge-count">Unread</span>
+        {{end}}
+    </a>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+    <p>No inbound emails yet. Configure MX for your domains and start receiving mail.</p>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,57 @@
+{{define "title"}}Email — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">{{if .Email.Subject}}{{.Email.Subject}}{{else}}(no subject){{end}}</h1>
+    <form method="POST" action="/inbox/{{.Email.ID}}/delete"
+          onsubmit="return confirm('Delete this email?')">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn-outline-red btn-sm">Delete</button>
+    </form>
+</div>
+
+<div class="info-panel">
+    <p class="info-panel-text"><strong>From:</strong> {{.Email.Sender}}</p>
+    <p class="info-panel-text"><strong>To:</strong> {{.Email.Recipient}}</p>
+    {{if .Email.MessageID}}<p class="info-panel-text"><strong>Message ID:</strong> {{.Email.MessageID}}</p>{{end}}
+    <p class="info-panel-text"><strong>Received:</strong> {{.Email.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</p>
+</div>
+
+{{if .Email.TextBody}}
+<div class="section-divider">
+    <span class="num">01</span>
+    <span>Text Body</span>
+</div>
+<div class="info-panel" style="border-top: none;">
+    <div class="message-body" style="color: var(--black);">{{.Email.TextBody}}</div>
+</div>
+{{end}}
+
+{{if and (not .Email.TextBody) .Email.HTMLBody}}
+<div class="section-divider">
+    <span class="num">01</span>
+    <span>HTML Body</span>
+</div>
+<div class="info-panel" style="border-top: none;">
+    <div class="message-body" style="color: var(--black);">{{.Email.HTMLBody}}</div>
+</div>
+{{end}}
+
+{{if .Attachments}}
+<div class="section-divider">
+    <span class="num">02</span>
+    <span>Attachments</span>
+</div>
+<div class="list-card" style="border-top: none;">
+    {{range .Attachments}}
+    <a href="/inbox/{{$.Email.ID}}/attachments/{{.ID}}" class="list-item">
+        <div>
+            <span class="list-item-name">{{.FileName}}</span>
+            <div class="list-item-sub" style="margin-top: 0.35rem;">{{.ContentType}} · {{.SizeBytes}} bytes</div>
+        </div>
+    </a>
+    {{end}}
+</div>
+{{end}}
+
+<a href="/inbox" class="back-link">Back to inbox</a>
+{{end}}

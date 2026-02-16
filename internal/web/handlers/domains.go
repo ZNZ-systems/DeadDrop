@@ -17,15 +17,17 @@ type DomainHandler struct {
 	domains       *domain.Service
 	messages      store.MessageStore
 	render        *render.Renderer
+	baseURL       string
 	secureCookies bool
 }
 
 // NewDomainHandler creates a new DomainHandler.
-func NewDomainHandler(domains *domain.Service, messages store.MessageStore, r *render.Renderer, secureCookies bool) *DomainHandler {
+func NewDomainHandler(domains *domain.Service, messages store.MessageStore, r *render.Renderer, baseURL string, secureCookies bool) *DomainHandler {
 	return &DomainHandler{
 		domains:       domains,
 		messages:      messages,
 		render:        r,
+		baseURL:       baseURL,
 		secureCookies: secureCookies,
 	}
 }
@@ -137,11 +139,18 @@ func (h *DomainHandler) ShowDomainDetail(w http.ResponseWriter, r *http.Request)
 		messages = nil
 	}
 
-	h.render.Render(w, r, "domain_detail.html", map[string]interface{}{
+	data := map[string]interface{}{
 		"User":     user,
 		"Domain":   d,
 		"Messages": messages,
-	})
+		"BaseURL":  h.baseURL,
+	}
+	if msg, msgType := consumeFlash(w, r, h.secureCookies); msg != "" {
+		data["Flash"] = msg
+		data["FlashType"] = msgType
+	}
+
+	h.render.Render(w, r, "domain_detail.html", data)
 }
 
 // HandleVerifyDomain initiates DNS verification for the domain.
@@ -173,9 +182,9 @@ func (h *DomainHandler) HandleVerifyDomain(w http.ResponseWriter, r *http.Reques
 
 	if err := h.domains.Verify(r.Context(), d); err != nil {
 		slog.Warn("domain verification failed", "domain", d.Name, "error", err)
-		setFlash(w, "Verification failed: "+err.Error(), h.secureCookies)
+		setFlashError(w, "Verification failed: "+err.Error(), h.secureCookies)
 	} else {
-		setFlash(w, "Domain verified successfully!", h.secureCookies)
+		setFlashSuccess(w, "Domain verified successfully!", h.secureCookies)
 	}
 
 	http.Redirect(w, r, "/domains/"+d.PublicID.String(), http.StatusSeeOther)

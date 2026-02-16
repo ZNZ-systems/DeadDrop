@@ -28,18 +28,9 @@ func NewAuthHandler(authService *auth.Service, renderer *render.Renderer, secure
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{}
 
-	// Read flash message from cookie if present.
-	if cookie, err := r.Cookie("flash"); err == nil {
-		data["flash"] = cookie.Value
-		// Clear the flash cookie.
-		http.SetCookie(w, &http.Cookie{
-			Name:     "flash",
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   h.secureCookies,
-		})
+	if msg, msgType := consumeFlash(w, r, h.secureCookies); msg != "" {
+		data["Flash"] = msg
+		data["FlashType"] = msgType
 	}
 
 	h.render.Render(w, r, "login.html", data)
@@ -48,7 +39,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 // HandleLogin processes the login form submission.
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.", h.secureCookies)
+		setFlashError(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -58,7 +49,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Invalid email or password.", h.secureCookies)
+		setFlashError(w, "Invalid email or password.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -80,18 +71,9 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{}
 
-	// Read flash message from cookie if present.
-	if cookie, err := r.Cookie("flash"); err == nil {
-		data["flash"] = cookie.Value
-		// Clear the flash cookie.
-		http.SetCookie(w, &http.Cookie{
-			Name:     "flash",
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   h.secureCookies,
-		})
+	if msg, msgType := consumeFlash(w, r, h.secureCookies); msg != "" {
+		data["Flash"] = msg
+		data["FlashType"] = msgType
 	}
 
 	h.render.Render(w, r, "signup.html", data)
@@ -100,7 +82,7 @@ func (h *AuthHandler) ShowSignup(w http.ResponseWriter, r *http.Request) {
 // HandleSignup processes the signup form submission.
 func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		setFlash(w, "Invalid form data.", h.secureCookies)
+		setFlashError(w, "Invalid form data.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -110,14 +92,14 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	passwordConfirm := r.FormValue("password_confirm")
 
 	if password != passwordConfirm {
-		setFlash(w, "Passwords do not match.", h.secureCookies)
+		setFlashError(w, "Passwords do not match.", h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
 
 	_, err := h.auth.Signup(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, err.Error(), h.secureCookies)
+		setFlashError(w, err.Error(), h.secureCookies)
 		http.Redirect(w, r, "/signup", http.StatusSeeOther)
 		return
 	}
@@ -125,7 +107,7 @@ func (h *AuthHandler) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	// Auto-login after successful signup.
 	session, err := h.auth.Login(r.Context(), email, password)
 	if err != nil {
-		setFlash(w, "Account created. Please log in.", h.secureCookies)
+		setFlashSuccess(w, "Account created. Please log in.", h.secureCookies)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -163,15 +145,4 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
-}
-
-// setFlash sets a flash message cookie for the next request.
-func setFlash(w http.ResponseWriter, message string, secure bool) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "flash",
-		Value:    message,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-	})
 }

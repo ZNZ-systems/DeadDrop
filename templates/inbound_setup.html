@@ -1,0 +1,85 @@
+{{define "title"}}Inbound Email Setup — DeadDrop{{end}}
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">{{.Domain.Name}} Catch-All Setup</h1>
+    <a href="/domains/{{.Domain.PublicID}}" class="btn-outline btn-sm">Back to Domain</a>
+</div>
+
+<div class="info-panel info-panel-warn">
+    <div class="info-panel-title">Required DNS MX Record</div>
+    <p class="info-panel-text">Create or update your domain MX record to point at:</p>
+    <div class="code-block">
+        <span class="hl">Type</span>=<span class="val">MX</span>
+        <span style="margin-left: 1rem;" class="hl">Host</span>=<span class="val">@</span>
+        <span style="margin-left: 1rem;" class="hl">Value</span>=<span class="val">{{.InboundConfig.MXTarget}}</span>
+        <span style="margin-left: 1rem;" class="hl">Priority</span>=<span class="val">10</span>
+    </div>
+</div>
+
+{{if .InboundConfig.MXVerified}}
+<div class="info-panel info-panel-success">
+    <div class="info-panel-title">Status: Active</div>
+    <p class="info-panel-text">MX verification passed. Catch-all email ingestion is enabled for this domain.</p>
+</div>
+{{else}}
+<div class="info-panel">
+    <div class="info-panel-title">Status: Pending Verification</div>
+    <p class="info-panel-text">After DNS changes propagate, click verify.</p>
+    {{if .InboundConfig.LastError}}
+    <p class="info-panel-text" style="color: var(--red);">Last check: {{.InboundConfig.LastError}}</p>
+    {{end}}
+    <form method="POST" action="/domains/{{.Domain.PublicID}}/inbound/verify" style="margin-top: 1rem;">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn-primary">Verify MX</button>
+    </form>
+</div>
+{{end}}
+
+<div class="section-divider">
+    <span class="num">02</span>
+    <span>Recipient Rules</span>
+</div>
+
+<div class="info-panel" style="border-top: none;">
+    <p class="info-panel-text">Rules are evaluated in this order: exact first, then wildcard. If at least one rule exists and no rule matches, the email is dropped.</p>
+    <form method="POST" action="/domains/{{.Domain.PublicID}}/inbound/rules">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <div class="form-group">
+            <label class="form-label" for="rule_type">Rule Type</label>
+            <select id="rule_type" name="rule_type" class="form-input" required>
+                <option value="exact">exact</option>
+                <option value="wildcard">wildcard</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="pattern">Pattern</label>
+            <input id="pattern" name="pattern" class="form-input" placeholder="sales or sales-*" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="action">Action</label>
+            <select id="action" name="action" class="form-input" required>
+                <option value="inbox">inbox</option>
+                <option value="drop">drop</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary">Add Rule</button>
+    </form>
+</div>
+
+{{if .Rules}}
+<div class="list-card">
+    {{range .Rules}}
+    <div class="list-item">
+        <div>
+            <span class="list-item-name">{{.RuleType}}: {{.Pattern}}</span>
+            <div class="list-item-sub" style="margin-top: 0.35rem;">Action: {{.Action}}</div>
+        </div>
+        <form method="POST" action="/domains/{{$.Domain.PublicID}}/inbound/rules/{{.ID}}/delete">
+            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+            <button type="submit" class="btn-outline-red btn-sm">Delete</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+{{end}}
+{{end}}

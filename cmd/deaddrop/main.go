@@ -14,6 +14,7 @@ import (
 	"github.com/znz-systems/deaddrop/internal/config"
 	"github.com/znz-systems/deaddrop/internal/database"
 	"github.com/znz-systems/deaddrop/internal/domain"
+	"github.com/znz-systems/deaddrop/internal/inbound"
 	"github.com/znz-systems/deaddrop/internal/mail"
 	"github.com/znz-systems/deaddrop/internal/message"
 	"github.com/znz-systems/deaddrop/internal/ratelimit"
@@ -52,6 +53,9 @@ func main() {
 	sessionStore := postgres.NewSessionStore(db)
 	domainStore := postgres.NewDomainStore(db)
 	messageStore := postgres.NewMessageStore(db)
+	inboundEmailStore := postgres.NewInboundEmailStore(db)
+	inboundDomainConfigStore := postgres.NewInboundDomainConfigStore(db)
+	inboundRuleStore := postgres.NewInboundRecipientRuleStore(db)
 
 	// Services
 	authService := auth.NewService(userStore, sessionStore, cfg.SessionMaxAge)
@@ -65,6 +69,8 @@ func main() {
 		notifier = &message.NoopNotifier{}
 	}
 	messageService := message.NewService(messageStore, domainStore, notifier)
+	inboundDomainService := inbound.NewDomainService(inboundDomainConfigStore, &inbound.NetMXResolver{}, cfg.InboundMXTarget)
+	inboundService := inbound.NewService(domainStore, inboundEmailStore, inboundDomainConfigStore, inboundRuleStore)
 
 	// Rate limiter
 	limiter := ratelimit.NewLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -74,22 +80,28 @@ func main() {
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, renderer, cfg.SecureCookies)
-	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.SecureCookies)
+	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.BaseURL, cfg.SecureCookies)
+	inboundDomainHandler := handlers.NewInboundDomainHandler(domainService, inboundDomainService, inboundRuleStore, renderer, cfg.SecureCookies)
 	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
-	apiHandler := handlers.NewAPIHandler(messageService)
+	apiHandler := handlers.NewAPIHandler(messageService, domainStore, cfg.APIMaxBodyBytes)
+	inboxHandler := handlers.NewInboxHandler(inboundEmailStore, renderer, cfg.SecureCookies)
+	inboundAPIHandler := handlers.NewInboundAPIHandler(inboundService, cfg.InboundAPIToken, cfg.InboundAPIMaxBodyBytes)
 
 	// Router
 	router := web.NewRouter(web.RouterDeps{
-		AuthHandler:    authHandler,
-		DomainHandler:  domainHandler,
-		MessageHandler: messageHandler,
-		APIHandler:     apiHandler,
-		AuthService:    authService,
-		Renderer:       renderer,
-		Limiter:        limiter,
-		StaticFS:       static.FS,
-		SecureCookies:  cfg.SecureCookies,
-		DB:             db,
+		AuthHandler:          authHandler,
+		DomainHandler:        domainHandler,
+		InboundDomainHandler: inboundDomainHandler,
+		MessageHandler:       messageHandler,
+		APIHandler:           apiHandler,
+		InboxHandler:         inboxHandler,
+		InboundAPIHandler:    inboundAPIHandler,
+		AuthService:          authService,
+		Renderer:             renderer,
+		Limiter:              limiter,
+		StaticFS:             static.FS,
+		SecureCookies:        cfg.SecureCookies,
+		DB:                   db,
 	})
 
 	// Session cleanup goroutine

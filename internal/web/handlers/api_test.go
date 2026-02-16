@@ -146,6 +146,18 @@ func postForm(handler http.HandlerFunc, values url.Values) *httptest.ResponseRec
 	return rr
 }
 
+func postFormWithOrigin(handler http.HandlerFunc, values url.Values, origin string) *httptest.ResponseRecorder {
+	body := values.Encode()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+	return rr
+}
+
 func parseJSONResponse(t *testing.T, rr *httptest.ResponseRecorder) jsonResponse {
 	t.Helper()
 	var resp jsonResponse
@@ -159,8 +171,8 @@ func parseJSONResponse(t *testing.T, rr *httptest.ResponseRecorder) jsonResponse
 
 func TestHandleSubmitMessage_Success(t *testing.T) {
 	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {domainID.String()},
@@ -182,8 +194,8 @@ func TestHandleSubmitMessage_Success(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_MissingDomainID(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil)
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(uuid.Nil)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"message": {"Hello"},
@@ -201,8 +213,8 @@ func TestHandleSubmitMessage_MissingDomainID(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_InvalidUUID(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil)
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(uuid.Nil)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {"not-a-uuid"},
@@ -222,8 +234,8 @@ func TestHandleSubmitMessage_InvalidUUID(t *testing.T) {
 
 func TestHandleSubmitMessage_MissingMessage(t *testing.T) {
 	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {domainID.String()},
@@ -243,8 +255,8 @@ func TestHandleSubmitMessage_MissingMessage(t *testing.T) {
 
 func TestHandleSubmitMessage_HoneypotFilled(t *testing.T) {
 	domainID := uuid.New()
-	svc, _ := makeTestService(domainID)
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {domainID.String()},
@@ -264,8 +276,8 @@ func TestHandleSubmitMessage_HoneypotFilled(t *testing.T) {
 }
 
 func TestHandleSubmitMessage_DomainNotFound(t *testing.T) {
-	svc, _ := makeTestService(uuid.Nil) // no domains
-	handler := NewAPIHandler(svc)
+	svc, ds := makeTestService(uuid.Nil) // no domains
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {uuid.New().String()},
@@ -290,7 +302,7 @@ func TestHandleSubmitMessage_DomainNotVerified(t *testing.T) {
 		Name:     "unverified.com",
 		Verified: false,
 	})
-	handler := NewAPIHandler(svc)
+	handler := NewAPIHandler(svc, ds, 16*1024)
 
 	values := url.Values{
 		"domain_id": {domainID.String()},
@@ -304,6 +316,87 @@ func TestHandleSubmitMessage_DomainNotVerified(t *testing.T) {
 	}
 	resp := parseJSONResponse(t, rr)
 	if resp.Error != "domain not verified" {
+		t.Errorf("unexpected error: %s", resp.Error)
+	}
+}
+
+func TestHandleSubmitMessage_OriginNotAllowed(t *testing.T) {
+	domainID := uuid.New()
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
+
+	values := url.Values{
+		"domain_id": {domainID.String()},
+		"message":   {"Hello"},
+	}
+
+	rr := postFormWithOrigin(handler.HandleSubmitMessage, values, "https://evil.com")
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected status 403, got %d", rr.Code)
+	}
+	resp := parseJSONResponse(t, rr)
+	if resp.Error != "origin not allowed for domain" {
+		t.Errorf("unexpected error: %s", resp.Error)
+	}
+}
+
+func TestHandleSubmitMessage_SubdomainOriginAllowed(t *testing.T) {
+	domainID := uuid.New()
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
+
+	values := url.Values{
+		"domain_id": {domainID.String()},
+		"message":   {"Hello"},
+	}
+
+	rr := postFormWithOrigin(handler.HandleSubmitMessage, values, "https://app.example.com")
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestHandleSubmitMessage_InvalidEmail(t *testing.T) {
+	domainID := uuid.New()
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 16*1024)
+
+	values := url.Values{
+		"domain_id": {domainID.String()},
+		"email":     {"not-an-email"},
+		"message":   {"Hello"},
+	}
+
+	rr := postForm(handler.HandleSubmitMessage, values)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rr.Code)
+	}
+	resp := parseJSONResponse(t, rr)
+	if resp.Error != "email must be valid" {
+		t.Errorf("unexpected error: %s", resp.Error)
+	}
+}
+
+func TestHandleSubmitMessage_PayloadTooLarge(t *testing.T) {
+	domainID := uuid.New()
+	svc, ds := makeTestService(domainID)
+	handler := NewAPIHandler(svc, ds, 64)
+
+	values := url.Values{
+		"domain_id": {domainID.String()},
+		"message":   {"this message is definitely too large for the configured body limit"},
+	}
+
+	rr := postForm(handler.HandleSubmitMessage, values)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected status 413, got %d", rr.Code)
+	}
+	resp := parseJSONResponse(t, rr)
+	if resp.Error != "payload too large" {
 		t.Errorf("unexpected error: %s", resp.Error)
 	}
 }

@@ -17,16 +17,21 @@ import (
 
 // RouterDeps holds all dependencies needed to build the router.
 type RouterDeps struct {
-	AuthHandler    *handlers.AuthHandler
-	DomainHandler  *handlers.DomainHandler
-	MessageHandler *handlers.MessageHandler
-	APIHandler     *handlers.APIHandler
-	AuthService    *auth.Service
-	Renderer       *render.Renderer
-	Limiter        *ratelimit.Limiter
-	StaticFS       fs.FS
-	SecureCookies  bool
-	DB             interface{ PingContext(ctx context.Context) error }
+	AuthHandler          *handlers.AuthHandler
+	DomainHandler        *handlers.DomainHandler
+	InboundDomainHandler *handlers.InboundDomainHandler
+	MessageHandler       *handlers.MessageHandler
+	APIHandler           *handlers.APIHandler
+	InboxHandler         *handlers.InboxHandler
+	InboundAPIHandler    *handlers.InboundAPIHandler
+	AuthService          *auth.Service
+	Renderer             *render.Renderer
+	Limiter              *ratelimit.Limiter
+	StaticFS             fs.FS
+	SecureCookies        bool
+	DB                   interface {
+		PingContext(ctx context.Context) error
+	}
 }
 
 // NewRouter wires all routes into a Chi router.
@@ -73,6 +78,16 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Get("/domains/{id}", deps.DomainHandler.ShowDomainDetail)
 		r.Post("/domains/{id}/verify", deps.DomainHandler.HandleVerifyDomain)
 		r.Post("/domains/{id}/delete", deps.DomainHandler.HandleDeleteDomain)
+		r.Get("/domains/{id}/inbound", deps.InboundDomainHandler.ShowInboundSetup)
+		r.Post("/domains/{id}/inbound/verify", deps.InboundDomainHandler.HandleVerifyInbound)
+		r.Post("/domains/{id}/inbound/rules", deps.InboundDomainHandler.HandleCreateRule)
+		r.Post("/domains/{id}/inbound/rules/{ruleID}/delete", deps.InboundDomainHandler.HandleDeleteRule)
+		r.Get("/inbox", deps.InboxHandler.ShowInbox)
+		r.Get("/inbox/{emailID}", deps.InboxHandler.ShowEmailDetail)
+		r.Get("/inbox/{emailID}/attachments/{attachmentID}", deps.InboxHandler.HandleDownloadAttachment)
+		r.Post("/inbox/{emailID}/read", deps.InboxHandler.HandleMarkRead)
+		r.Post("/inbox/{emailID}/delete", deps.InboxHandler.HandleDelete)
+		r.Get("/api/v1/inbox/search", deps.InboxHandler.HandleSearchAPI)
 
 		r.Post("/messages/{messageID}/read", deps.MessageHandler.HandleMarkRead)
 		r.Delete("/messages/{messageID}", deps.MessageHandler.HandleDeleteMessage)
@@ -84,6 +99,12 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Use(middleware.RateLimit(deps.Limiter))
 
 		r.Post("/api/v1/messages", deps.APIHandler.HandleSubmitMessage)
+	})
+
+	// Inbound email ingestion API (provider/webhook, token-authenticated)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RateLimit(deps.Limiter))
+		r.Post("/api/v1/inbound/emails", deps.InboundAPIHandler.HandleReceiveEmail)
 	})
 
 	// Health check
