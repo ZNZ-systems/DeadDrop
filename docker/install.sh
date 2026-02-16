@@ -164,7 +164,10 @@ normalize_compose_for_installer() {
         's#(^[[:space:]]*context:)[[:space:]]*\.\.[[:space:]]*$#\1 ./src#' \
         docker-compose.prod.yml
       sed -i.bak -E \
-        's#(^[[:space:]]*dockerfile:)[[:space:]]*docker/Dockerfile[[:space:]]*$#\1 ./src/docker/Dockerfile#' \
+        's#(^[[:space:]]*dockerfile:)[[:space:]]*\./src/docker/Dockerfile[[:space:]]*$#\1 docker/Dockerfile#' \
+        docker-compose.prod.yml
+      sed -i.bak -E \
+        's#(^[[:space:]]*dockerfile:)[[:space:]]*src/docker/Dockerfile[[:space:]]*$#\1 docker/Dockerfile#' \
         docker-compose.prod.yml
       rm -f docker-compose.prod.yml.bak
     fi
