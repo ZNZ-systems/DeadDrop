@@ -6,6 +6,7 @@ BRANCH="${BRANCH:-master}"
 REMOTE_DOCKER_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/docker"
 INSTALL_DIR="${INSTALL_DIR:-deaddrop}"
 ENV_FILE=".env.prod"
+DASHBOARD_PORT="${DASHBOARD_PORT:-8080}"
 TOTAL_STEPS=7
 STEP_NUM=0
 
@@ -172,6 +173,12 @@ normalize_compose_for_installer() {
       rm -f docker-compose.prod.yml.bak
     fi
   fi
+
+  # Expose dashboard on an explicit host port so users have a concrete URL.
+  sed -i.bak -E \
+    "s#(^[[:space:]]*-[[:space:]]*\")80:80(\"[[:space:]]*\$)#\\1${DASHBOARD_PORT}:80\\2#" \
+    docker-compose.prod.yml
+  rm -f docker-compose.prod.yml.bak
 }
 
 upsert_env() {
@@ -263,7 +270,7 @@ seed_environment() {
     [ "${base_url}" = "http://${domain}" ] || \
     [ "${base_url}" = "https://deaddrop.example.com" ] || \
     [ "${base_url}" = "http://deaddrop.example.com" ]; then
-    base_url="http://$(detect_local_ip)"
+    base_url="http://$(detect_local_ip):${DASHBOARD_PORT}"
   fi
 
   if echo "${base_url}" | grep -q '^https://'; then
@@ -305,6 +312,10 @@ db_volume_exists() {
 
 validate_compose_file_has_local_build_context() {
   grep -qE '^[[:space:]]*context:[[:space:]]*\./src[[:space:]]*$' docker-compose.prod.yml
+}
+
+validate_compose_dashboard_port_mapping() {
+  grep -q "\"${DASHBOARD_PORT}:80\"" docker-compose.prod.yml
 }
 
 validate_env_key_nonempty() {
@@ -397,6 +408,7 @@ main() {
   validate "docker-compose.prod.yml downloaded" validate_file_nonempty "docker-compose.prod.yml"
   validate "Caddyfile downloaded" validate_file_nonempty "Caddyfile"
   validate ".env.prod.example downloaded" validate_file_nonempty ".env.prod.example"
+  validate "dashboard host port mapped (${DASHBOARD_PORT}:80)" validate_compose_dashboard_port_mapping
   if grep -qE '^[[:space:]]*build:[[:space:]]*$' docker-compose.prod.yml; then
     validate "local build context rewritten for installer layout" validate_compose_file_has_local_build_context
     validate "local build Dockerfile is present" validate_file_nonempty "src/docker/Dockerfile"
