@@ -202,6 +202,23 @@ random_password() {
   fi
 }
 
+detect_local_ip() {
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [ -n "${ip}" ]; then
+    echo "${ip}"
+    return 0
+  fi
+  echo "localhost"
+}
+
+normalize_caddy_for_installer() {
+  cat > Caddyfile <<'EOF'
+:80 {
+	reverse_proxy app:8080
+}
+EOF
+}
+
 mask_database_url() {
   echo "$1" | sed -E 's#(postgres://[^:]+:)[^@]+#\1***#'
 }
@@ -215,9 +232,8 @@ seed_environment() {
   fi
 
   domain="${DOMAIN:-$(read_env_value DOMAIN)}"
-  if [ -z "${domain}" ]; then
+  if [ -z "${domain}" ] || [ "${domain}" = "deaddrop.example.com" ]; then
     domain="localhost"
-    warn "DOMAIN was not set. Defaulting to localhost."
   fi
 
   pg_user="$(read_env_value POSTGRES_USER)"
@@ -237,12 +253,20 @@ seed_environment() {
       ;;
   esac
 
-  if [ "${domain}" = "localhost" ] || [ "${domain}" = "127.0.0.1" ]; then
-    base_url="http://${domain}"
-    secure_cookies="false"
-  else
-    base_url="https://${domain}"
+  base_url="${BASE_URL:-$(read_env_value BASE_URL)}"
+  if [ -z "${base_url}" ] || \
+    echo "${base_url}" | grep -q '\${DOMAIN}' || \
+    [ "${base_url}" = "https://${domain}" ] || \
+    [ "${base_url}" = "http://${domain}" ] || \
+    [ "${base_url}" = "https://deaddrop.example.com" ] || \
+    [ "${base_url}" = "http://deaddrop.example.com" ]; then
+    base_url="http://$(detect_local_ip)"
+  fi
+
+  if echo "${base_url}" | grep -q '^https://'; then
     secure_cookies="true"
+  else
+    secure_cookies="false"
   fi
 
   db_url="postgres://${pg_user}:${pg_pass}@db:5432/${pg_db}?sslmode=disable"
@@ -354,12 +378,14 @@ main() {
     validate "local build context rewritten for installer layout" validate_compose_file_has_local_build_context
     validate "local build Dockerfile is present" validate_file_nonempty "src/docker/Dockerfile"
   fi
+  normalize_caddy_for_installer
+  validate "Caddyfile set to host-only reverse proxy mode (:80)" grep -q '^:80 {' Caddyfile
 
   step "Generate Application Environment" \
     "Instruction: Create/update .env.prod with generated DB password and DATABASE_URL."
   seed_environment
   validate ".env.prod exists" validate_file_nonempty "${ENV_FILE}"
-  validate "DOMAIN is set" validate_env_key_nonempty "DOMAIN"
+  validate "BASE_URL is set" validate_env_key_nonempty "BASE_URL"
   validate "DATABASE_URL is set" validate_env_key_nonempty "DATABASE_URL"
   validate "POSTGRES_PASSWORD is set" validate_env_key_nonempty "POSTGRES_PASSWORD"
 
@@ -383,13 +409,18 @@ main() {
   info ""
   info "Install complete."
   info "Directory: $(pwd)"
-  info "Domain: $(read_env_value DOMAIN)"
+  info "Dashboard URL: $(read_env_value BASE_URL)"
   info "DATABASE_URL: $(mask_database_url "$(read_env_value DATABASE_URL)")"
   info ""
-  info "Manual DNS checklist:"
-  info "  1. Point app host (DOMAIN) A record to this server IP."
-  info "  2. Point MX host A record (for inbound SMTP) to this server IP."
-  info "  3. Add MX record for your sending domain to that MX host."
+  info "Next setup in dashboard (domain onboarding happens here):"
+  info "  1. Open dashboard at $(read_env_value BASE_URL)"
+  info "     Validation: curl -sS $(read_env_value BASE_URL)/health"
+  info "  2. Sign in and create a domain in the Domains screen."
+  info "     Validation: Domain appears as Pending Verification."
+  info "  3. Add the DNS records shown in the dashboard (TXT + MX, optionally SPF/DMARC)."
+  info "     Validation: Click Verify in dashboard and status becomes Verified."
+  info "  4. Send test mail to any address on that domain."
+  info "     Validation: Message appears in the Inbox view."
   info ""
   info "Useful commands:"
   info "  ${COMPOSE_CMD[*]} -f docker-compose.prod.yml --env-file ${ENV_FILE} ps"
