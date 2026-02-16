@@ -178,6 +178,12 @@ normalize_compose_for_installer() {
   sed -i.bak -E \
     "s#(^[[:space:]]*-[[:space:]]*\")80:80(\"[[:space:]]*\$)#\\1${DASHBOARD_PORT}:80\\2#" \
     docker-compose.prod.yml
+  sed -i.bak -E \
+    's#(^[[:space:]]*-[[:space:]]*)SECURE_COOKIES=true([[:space:]]*$)#\1SECURE_COOKIES=${SECURE_COOKIES}\2#' \
+    docker-compose.prod.yml
+  sed -i.bak -E \
+    's#(^[[:space:]]*-[[:space:]]*)BASE_URL=https://\$\{DOMAIN\}([[:space:]]*$)#\1BASE_URL=${BASE_URL}\2#' \
+    docker-compose.prod.yml
   rm -f docker-compose.prod.yml.bak
 }
 
