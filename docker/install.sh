@@ -137,6 +137,40 @@ download_stack_files() {
   curl -fsSL "${BASE_URL}/.env.prod.example" -o .env.prod.example
 }
 
+download_source_archive() {
+  info "Downloading source archive for local app build..."
+  tmp_dir="$(mktemp -d)"
+  archive_path="${tmp_dir}/repo.tgz"
+  archive_url="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+
+  curl -fsSL "${archive_url}" -o "${archive_path}"
+  tar -xzf "${archive_path}" -C "${tmp_dir}"
+
+  extracted_root="$(find "${tmp_dir}" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+  [ -n "${extracted_root}" ] || fail "Could not locate extracted source archive directory."
+
+  rm -rf src
+  mkdir -p src
+  cp -R "${extracted_root}"/. src/
+  rm -rf "${tmp_dir}"
+}
+
+normalize_compose_for_installer() {
+  if grep -qE '^[[:space:]]*build:[[:space:]]*$' docker-compose.prod.yml; then
+    if grep -qE '^[[:space:]]*context:[[:space:]]*\.\.[[:space:]]*$' docker-compose.prod.yml; then
+      download_source_archive
+
+      sed -i.bak -E \
+        's#(^[[:space:]]*context:)[[:space:]]*\.\.[[:space:]]*$#\1 ./src#' \
+        docker-compose.prod.yml
+      sed -i.bak -E \
+        's#(^[[:space:]]*dockerfile:)[[:space:]]*docker/Dockerfile[[:space:]]*$#\1 ./src/docker/Dockerfile#' \
+        docker-compose.prod.yml
+      rm -f docker-compose.prod.yml.bak
+    fi
+  fi
+}
+
 upsert_env() {
   key="$1"
   value="$2"
@@ -227,6 +261,10 @@ validate_file_nonempty() {
   [ -s "$1" ]
 }
 
+validate_compose_file_has_local_build_context() {
+  grep -qE '^[[:space:]]*context:[[:space:]]*\./src[[:space:]]*$' docker-compose.prod.yml
+}
+
 validate_env_key_nonempty() {
   [ -n "$(read_env_value "$1")" ]
 }
@@ -305,9 +343,14 @@ main() {
   step "Download Production Files" \
     "Instruction: Download compose file, Caddy config, and environment template."
   download_stack_files
+  normalize_compose_for_installer
   validate "docker-compose.prod.yml downloaded" validate_file_nonempty "docker-compose.prod.yml"
   validate "Caddyfile downloaded" validate_file_nonempty "Caddyfile"
   validate ".env.prod.example downloaded" validate_file_nonempty ".env.prod.example"
+  if grep -qE '^[[:space:]]*build:[[:space:]]*$' docker-compose.prod.yml; then
+    validate "local build context rewritten for installer layout" validate_compose_file_has_local_build_context
+    validate "local build Dockerfile is present" validate_file_nonempty "src/docker/Dockerfile"
+  fi
 
   step "Generate Application Environment" \
     "Instruction: Create/update .env.prod with generated DB password and DATABASE_URL."
