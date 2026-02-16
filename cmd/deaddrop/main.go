@@ -101,10 +101,10 @@ func main() {
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, renderer, cfg.SecureCookies)
-	domainHandler := handlers.NewDomainHandler(domainService, messageStore, renderer, cfg.SecureCookies)
+	domainHandler := handlers.NewDomainHandler(domainService, messageStore, mailboxStore, streamStore, renderer, cfg.BaseURL, cfg.SecureCookies)
 	messageHandler := handlers.NewMessageHandler(messageService, messageStore, domainStore, renderer)
 	apiHandler := handlers.NewAPIHandler(streamStore, conversationService)
-	mailboxHandler := handlers.NewMailboxHandler(mailboxService, conversationService, domainService, streamStore, conversationStore, renderer, cfg.SecureCookies)
+	mailboxHandler := handlers.NewMailboxHandler(mailboxService, conversationService, domainService, streamStore, conversationStore, renderer, cfg.BaseURL, cfg.SecureCookies)
 
 	// Router
 	router := web.NewRouter(web.RouterDeps{

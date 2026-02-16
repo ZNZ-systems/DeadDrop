@@ -23,12 +23,37 @@
 </div>
 {{else}}
 <div class="info-panel info-panel-success">
-    <div class="info-panel-title">Widget Embed Code</div>
-    <p class="info-panel-text">Add this script tag to any page on {{.Domain.Name}}:</p>
+    <div class="info-panel-title">Domain Verified</div>
+    <p class="info-panel-text">Now route both channels into a mailbox: website widget + inbound email.</p>
+
+    {{if .Mailbox}}
+    <p class="info-panel-text" style="margin-top: .75rem;">
+        Mailbox ready:
+        <a href="/mailboxes/{{.Mailbox.PublicID}}" class="back-link" style="display: inline; margin: 0 0 0 .35rem;">open {{.Mailbox.Name}}</a>
+    </p>
+    {{else}}
+    <p class="info-panel-text" style="margin-top: .75rem;">
+        Next step:
+        <a href="/mailboxes/new?domain_id={{.Domain.ID}}&from_address={{urlquery .SuggestedFrom}}" class="back-link" style="display: inline; margin: 0 0 0 .35rem;">create mailbox</a>
+        (recommended from address: <strong>{{.SuggestedFrom}}</strong>)
+    </p>
+    {{end}}
+
+    {{if .FormWidgetID}}
+    <p class="info-panel-text" style="margin-top: 1rem;">Widget embed (this sends to your mailbox form stream):</p>
     <div class="code-block">
         <span class="hl">&lt;script</span> <span style="color:#f5f0e8;">src</span>=<span class="val">"{{$.BaseURL}}/static/widget.js"</span>
-  <span style="color:#f5f0e8;">data-deaddrop-id</span>=<span class="val">"{{.Domain.PublicID}}"</span><span class="hl">&gt;&lt;/script&gt;</span>
+        <span style="color:#f5f0e8;">data-deaddrop-id</span>=<span class="val">"{{.FormWidgetID}}"</span><span class="hl">&gt;&lt;/script&gt;</span>
     </div>
+    {{else}}
+    <p class="info-panel-text" style="margin-top: 1rem;">No form stream found yet. Create a mailbox (or open an existing mailbox) to generate a widget stream ID.</p>
+    {{end}}
+
+    {{if .EmailStreamAddress}}
+    <p class="info-panel-text" style="margin-top: .75rem;">Inbound email stream address: <strong>{{.EmailStreamAddress}}</strong></p>
+    {{else}}
+    <p class="info-panel-text" style="margin-top: .75rem;">No email stream found yet. Add one in the mailbox page (for example: <strong>{{.SuggestedFrom}}</strong>).</p>
+    {{end}}
 </div>
 {{end}}
 

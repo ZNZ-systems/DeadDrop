@@ -16,16 +16,30 @@ import (
 type DomainHandler struct {
 	domains       *domain.Service
 	messages      store.MessageStore
+	mailboxes     store.MailboxStore
+	streams       store.StreamStore
 	render        *render.Renderer
+	baseURL       string
 	secureCookies bool
 }
 
 // NewDomainHandler creates a new DomainHandler.
-func NewDomainHandler(domains *domain.Service, messages store.MessageStore, r *render.Renderer, secureCookies bool) *DomainHandler {
+func NewDomainHandler(
+	domains *domain.Service,
+	messages store.MessageStore,
+	mailboxes store.MailboxStore,
+	streams store.StreamStore,
+	r *render.Renderer,
+	baseURL string,
+	secureCookies bool,
+) *DomainHandler {
 	return &DomainHandler{
 		domains:       domains,
 		messages:      messages,
+		mailboxes:     mailboxes,
+		streams:       streams,
 		render:        r,
+		baseURL:       baseURL,
 		secureCookies: secureCookies,
 	}
 }
@@ -137,10 +151,49 @@ func (h *DomainHandler) ShowDomainDetail(w http.ResponseWriter, r *http.Request)
 		messages = nil
 	}
 
+	var mailbox interface{}
+	formWidgetID := ""
+	emailStreamAddress := ""
+	if h.mailboxes != nil && h.streams != nil {
+		mailboxes, err := h.mailboxes.GetMailboxesByUserID(r.Context(), user.ID)
+		if err != nil {
+			slog.Warn("failed to list user mailboxes for domain detail", "user_id", user.ID, "error", err)
+		} else {
+			for _, mb := range mailboxes {
+				if mb.DomainID != d.ID {
+					continue
+				}
+				if mailbox == nil {
+					mailbox = mb
+				}
+
+				streams, streamErr := h.streams.GetStreamsByMailboxID(r.Context(), mb.ID)
+				if streamErr != nil {
+					slog.Warn("failed to load mailbox streams for domain detail", "mailbox_id", mb.ID, "error", streamErr)
+					continue
+				}
+
+				for _, st := range streams {
+					if st.Type == "form" && formWidgetID == "" && st.WidgetID != uuid.Nil {
+						formWidgetID = st.WidgetID.String()
+					}
+					if st.Type == "email" && emailStreamAddress == "" && st.Address != "" {
+						emailStreamAddress = st.Address
+					}
+				}
+			}
+		}
+	}
+
 	h.render.Render(w, r, "domain_detail.html", map[string]interface{}{
-		"User":     user,
-		"Domain":   d,
-		"Messages": messages,
+		"User":               user,
+		"Domain":             d,
+		"Messages":           messages,
+		"Mailbox":            mailbox,
+		"FormWidgetID":       formWidgetID,
+		"EmailStreamAddress": emailStreamAddress,
+		"SuggestedFrom":      "contact@" + d.Name,
+		"BaseURL":            h.baseURL,
 	})
 }
 

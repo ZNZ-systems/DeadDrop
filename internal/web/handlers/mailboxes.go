@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -23,6 +24,7 @@ type MailboxHandler struct {
 	streams       store.StreamStore
 	convStore     store.ConversationStore
 	render        *render.Renderer
+	baseURL       string
 	secureCookies bool
 }
 
@@ -33,6 +35,7 @@ func NewMailboxHandler(
 	streams store.StreamStore,
 	convStore store.ConversationStore,
 	r *render.Renderer,
+	baseURL string,
 	secureCookies bool,
 ) *MailboxHandler {
 	return &MailboxHandler{
@@ -42,6 +45,7 @@ func NewMailboxHandler(
 		streams:       streams,
 		convStore:     convStore,
 		render:        r,
+		baseURL:       baseURL,
 		secureCookies: secureCookies,
 	}
 }
@@ -82,10 +86,22 @@ func (h *MailboxHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *MailboxHandler) ShowNewMailbox(w http.ResponseWriter, r *http.Request) {
 	user := middleware.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
 	domains, _ := h.domains.List(r.Context(), user.ID)
+	selectedDomainID := strings.TrimSpace(r.URL.Query().Get("domain_id"))
+	fromAddress := strings.TrimSpace(r.URL.Query().Get("from_address"))
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+
 	h.render.Render(w, r, "mailbox_new.html", map[string]interface{}{
-		"User":    user,
-		"Domains": domains,
+		"User":             user,
+		"Domains":          domains,
+		"SelectedDomainID": selectedDomainID,
+		"FromAddress":      fromAddress,
+		"Name":             name,
 	})
 }
 
@@ -124,6 +140,24 @@ func (h *MailboxHandler) HandleCreateMailbox(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Bootstrap both channels by default:
+	// - form stream: widget submissions
+	// - email stream: inbound SMTP to the mailbox address
+	if _, err := h.streams.CreateStream(r.Context(), mb.ID, "form", "", uuid.New()); err != nil {
+		slog.Warn("failed to bootstrap form stream", "mailbox_id", mb.ID, "error", err)
+		setFlash(w, "Mailbox created, but default form stream failed to create. Add it manually in mailbox settings.", h.secureCookies)
+		http.Redirect(w, r, "/mailboxes/"+mb.PublicID.String(), http.StatusSeeOther)
+		return
+	}
+	if _, err := h.streams.CreateStream(r.Context(), mb.ID, "email", strings.ToLower(fromAddress), uuid.Nil); err != nil {
+		slog.Warn("failed to bootstrap email stream", "mailbox_id", mb.ID, "error", err)
+		setFlash(w, "Mailbox created and form stream ready. Add your email stream manually in mailbox settings.", h.secureCookies)
+		http.Redirect(w, r, "/mailboxes/"+mb.PublicID.String(), http.StatusSeeOther)
+		return
+	}
+
+	setFlash(w, "Mailbox created with default form and email streams.", h.secureCookies)
+
 	http.Redirect(w, r, "/mailboxes/"+mb.PublicID.String(), http.StatusSeeOther)
 }
 
@@ -154,6 +188,7 @@ func (h *MailboxHandler) ShowMailboxDetail(w http.ResponseWriter, r *http.Reques
 		"Mailbox":       mb,
 		"Conversations": convos,
 		"Streams":       streams,
+		"BaseURL":       h.baseURL,
 	})
 }
 

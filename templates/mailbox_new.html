@@ -23,7 +23,7 @@
                 <option value="">Select a verified domain</option>
                 {{range .Domains}}
                 {{if .Verified}}
-                <option value="{{.ID}}">{{.Name}}</option>
+                <option value="{{.ID}}" {{if eq (printf "%d" .ID) $.SelectedDomainID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
                 {{end}}
             </select>
@@ -32,9 +32,13 @@
 
         <div class="form-group">
             <label class="form-label">From Address</label>
-            <input type="email" name="from_address" class="form-input" placeholder="e.g. support@yourdomain.com" required>
+            <input type="email" name="from_address" class="form-input" placeholder="e.g. support@yourdomain.com" value="{{.FromAddress}}" required>
             <p class="form-hint">Must match the selected domain.</p>
         </div>
+
+        <p class="form-hint" style="margin-top: 1rem;">
+            DeadDrop will auto-create one Form stream (for the widget) and one Email stream (for inbound email) for this mailbox.
+        </p>
 
         <button type="submit" class="btn-primary" style="width: 100%;">Create Mailbox</button>
     </form>

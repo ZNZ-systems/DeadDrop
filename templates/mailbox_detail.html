@@ -46,6 +46,22 @@
 </div>
 {{end}}
 
+{{if .Streams}}
+<div class="info-panel" style="margin-top: 1rem;">
+    <div class="info-panel-title">Channel Setup</div>
+    {{range .Streams}}
+    {{if eq (printf "%s" .Type) "form"}}
+    <p class="info-panel-text" style="margin-top: .75rem;">Widget stream embed code:</p>
+    <div class="code-block">
+        <span class="hl">&lt;script</span> <span style="color:#f5f0e8;">src</span>=<span class="val">"{{$.BaseURL}}/static/widget.js"</span>
+        <span style="color:#f5f0e8;">data-deaddrop-id</span>=<span class="val">"{{.WidgetID}}"</span><span class="hl">&gt;&lt;/script&gt;</span>
+    </div>
+    {{end}}
+    {{end}}
+    <p class="info-panel-text" style="margin-top: .75rem;">For inbound email, point your domain MX to this server and use one of your Email stream addresses above (for example <strong>{{.Mailbox.FromAddress}}</strong>).</p>
+</div>
+{{end}}
+
 <form method="POST" action="/mailboxes/{{.Mailbox.PublicID}}/streams" style="margin-top: 1.5rem;">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <div style="display: flex; gap: 1rem; align-items: flex-end;">
