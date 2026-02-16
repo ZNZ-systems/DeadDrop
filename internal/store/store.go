@@ -38,3 +38,28 @@ type MessageStore interface {
 	DeleteMessage(ctx context.Context, id int64) error
 	CountUnreadByDomainID(ctx context.Context, domainID int64) (int, error)
 }
+
+type InboundEmailStore interface {
+	CreateInboundEmail(ctx context.Context, params models.InboundEmailCreateParams) (*models.InboundEmail, error)
+	ListInboundEmailsByUserID(ctx context.Context, userID int64, limit, offset int) ([]models.InboundEmail, error)
+	SearchInboundEmailsByUserID(ctx context.Context, userID int64, query models.InboundEmailQuery) ([]models.InboundEmail, error)
+	GetInboundEmailByID(ctx context.Context, id int64) (*models.InboundEmail, error)
+	CreateInboundEmailRaw(ctx context.Context, inboundEmailID int64, rawSource string) error
+	CreateInboundEmailAttachment(ctx context.Context, params models.InboundEmailAttachmentCreateParams) (*models.InboundEmailAttachment, error)
+	ListInboundEmailAttachmentsByEmailID(ctx context.Context, inboundEmailID int64) ([]models.InboundEmailAttachment, error)
+	GetInboundEmailAttachmentByID(ctx context.Context, attachmentID int64) (*models.InboundEmailAttachment, error)
+	MarkInboundEmailRead(ctx context.Context, id int64) error
+	DeleteInboundEmail(ctx context.Context, id int64) error
+}
+
+type InboundDomainConfigStore interface {
+	UpsertInboundDomainConfig(ctx context.Context, domainID int64, mxTarget string) (*models.InboundDomainConfig, error)
+	GetInboundDomainConfigByDomainID(ctx context.Context, domainID int64) (*models.InboundDomainConfig, error)
+	UpdateInboundDomainVerification(ctx context.Context, domainID int64, verified bool, lastError string) error
+}
+
+type InboundRecipientRuleStore interface {
+	CreateInboundRecipientRule(ctx context.Context, domainID int64, ruleType, pattern, action string) (*models.InboundRecipientRule, error)
+	ListInboundRecipientRulesByDomainID(ctx context.Context, domainID int64) ([]models.InboundRecipientRule, error)
+	DeleteInboundRecipientRule(ctx context.Context, domainID, ruleID int64) error
+}
