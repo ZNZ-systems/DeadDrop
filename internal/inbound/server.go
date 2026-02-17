@@ -1,10 +1,19 @@
 package inbound
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"html"
 	"io"
 	"log/slog"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
+	"net/mail"
+	"net/textproto"
+	"regexp"
 	"strings"
 	"time"
 
@@ -102,15 +111,15 @@ func (s *session) Data(r io.Reader) error {
 	}
 
 	// Parse the email to extract subject and plain text body.
-	subject, plainBody := parseEmail(body)
+	email := parseEmail(body, s.from)
 
 	_, err = s.server.conversations.StartConversation(
 		context.Background(),
 		s.stream,
-		subject,
-		s.from,
-		"", // sender name extracted from email headers if available
-		plainBody,
+		email.Subject,
+		email.SenderAddress,
+		email.SenderName,
+		email.Body,
 	)
 	if err != nil {
 		slog.Error("failed to create conversation from inbound email",
@@ -118,7 +127,11 @@ func (s *session) Data(r io.Reader) error {
 		return err
 	}
 
-	slog.Info("inbound email processed", "from", s.from, "to", s.to, "subject", subject)
+	slog.Info("inbound email processed",
+		"from", email.SenderAddress,
+		"to", s.to,
+		"subject", email.Subject,
+	)
 	return nil
 }
 
@@ -132,16 +145,224 @@ func (s *session) Logout() error {
 	return nil
 }
 
-// parseEmail extracts subject and plain text body from raw email bytes.
-func parseEmail(raw []byte) (subject, body string) {
-	lines := strings.SplitN(string(raw), "\r\n\r\n", 2)
-	if len(lines) == 2 {
-		body = lines[1]
+type parsedEmail struct {
+	Subject       string
+	SenderAddress string
+	SenderName    string
+	Body          string
+}
+
+var (
+	scriptStyleTagRe = regexp.MustCompile(`(?is)<(script|style)\b[^>]*>.*?</(script|style)>`)
+	htmlTagRe        = regexp.MustCompile(`(?s)<[^>]+>`)
+)
+
+// parseEmail extracts sender, subject, and a readable text body from raw MIME email bytes.
+func parseEmail(raw []byte, envelopeFrom string) parsedEmail {
+	email := parsedEmail{
+		SenderAddress: strings.TrimSpace(envelopeFrom),
 	}
-	for _, line := range strings.Split(lines[0], "\r\n") {
-		if strings.HasPrefix(strings.ToLower(line), "subject:") {
-			subject = strings.TrimSpace(line[8:])
+
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		email.Body = fallbackBody(raw)
+		return email
+	}
+
+	email.Subject = decodeHeaderValue(msg.Header.Get("Subject"))
+	addr, name := parseFrom(msg.Header.Get("From"))
+	if addr != "" {
+		email.SenderAddress = addr
+	}
+	email.SenderName = name
+
+	body, err := extractBodyFromHeader(textproto.MIMEHeader(msg.Header), msg.Body)
+	if err != nil {
+		email.Body = fallbackBody(raw)
+	} else {
+		email.Body = strings.TrimSpace(body)
+	}
+
+	if email.Body == "" {
+		email.Body = fallbackBody(raw)
+	}
+
+	return email
+}
+
+func parseFrom(rawFrom string) (address, name string) {
+	if strings.TrimSpace(rawFrom) == "" {
+		return "", ""
+	}
+	addr, err := mail.ParseAddress(rawFrom)
+	if err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(addr.Address), decodeHeaderValue(addr.Name)
+}
+
+func decodeHeaderValue(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+
+	decoded, err := new(mime.WordDecoder).DecodeHeader(v)
+	if err != nil {
+		return v
+	}
+
+	return strings.TrimSpace(decoded)
+}
+
+func extractBodyFromHeader(header textproto.MIMEHeader, body io.Reader) (string, error) {
+	contentType := header.Get("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "text/plain; charset=utf-8"
+	}
+
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = "text/plain"
+	}
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+
+	encoding := strings.ToLower(strings.TrimSpace(header.Get("Content-Transfer-Encoding")))
+	decodedReader := decodeTransferEncoding(body, encoding)
+
+	if strings.HasPrefix(mediaType, "multipart/") {
+		boundary := params["boundary"]
+		if boundary == "" {
+			b, readErr := io.ReadAll(decodedReader)
+			if readErr != nil {
+				return "", readErr
+			}
+			return strings.TrimSpace(string(b)), nil
 		}
+
+		mr := multipart.NewReader(decodedReader, boundary)
+		var plainBody string
+		var htmlBody string
+
+		for {
+			part, partErr := mr.NextPart()
+			if errors.Is(partErr, io.EOF) {
+				break
+			}
+			if partErr != nil {
+				return "", partErr
+			}
+
+			partBody, extractErr := extractBodyFromHeader(part.Header, part)
+			_ = part.Close()
+			if extractErr != nil {
+				continue
+			}
+
+			partContentType := strings.ToLower(strings.TrimSpace(part.Header.Get("Content-Type")))
+			if strings.Contains(partContentType, "text/plain") {
+				if strings.TrimSpace(partBody) != "" && plainBody == "" {
+					plainBody = partBody
+				}
+				continue
+			}
+
+			if strings.Contains(partContentType, "text/html") {
+				if strings.TrimSpace(partBody) != "" && htmlBody == "" {
+					htmlBody = partBody
+				}
+				continue
+			}
+
+			if strings.TrimSpace(partBody) != "" && plainBody == "" {
+				plainBody = partBody
+			}
+		}
+
+		if strings.TrimSpace(plainBody) != "" {
+			return strings.TrimSpace(plainBody), nil
+		}
+		if strings.TrimSpace(htmlBody) != "" {
+			return strings.TrimSpace(htmlBody), nil
+		}
+		return "", nil
 	}
-	return subject, body
+
+	b, err := io.ReadAll(decodedReader)
+	if err != nil {
+		return "", err
+	}
+	text := string(b)
+
+	switch mediaType {
+	case "text/html":
+		return strings.TrimSpace(htmlToText(text)), nil
+	case "message/rfc822":
+		nested, nestedErr := mail.ReadMessage(bytes.NewReader(b))
+		if nestedErr != nil {
+			return strings.TrimSpace(text), nil
+		}
+		return extractBodyFromHeader(textproto.MIMEHeader(nested.Header), nested.Body)
+	default:
+		return strings.TrimSpace(text), nil
+	}
+}
+
+func decodeTransferEncoding(body io.Reader, encoding string) io.Reader {
+	switch encoding {
+	case "base64":
+		return base64.NewDecoder(base64.StdEncoding, body)
+	case "quoted-printable":
+		return quotedprintable.NewReader(body)
+	default:
+		return body
+	}
+}
+
+func htmlToText(s string) string {
+	s = scriptStyleTagRe.ReplaceAllString(s, "")
+	lineBreakReplacer := strings.NewReplacer(
+		"<br>", "\n",
+		"<br/>", "\n",
+		"<br />", "\n",
+		"</p>", "\n",
+		"</div>", "\n",
+		"</li>", "\n",
+		"<li>", "\n- ",
+		"</tr>", "\n",
+		"</h1>", "\n",
+		"</h2>", "\n",
+		"</h3>", "\n",
+		"</h4>", "\n",
+		"</h5>", "\n",
+		"</h6>", "\n",
+	)
+	s = lineBreakReplacer.Replace(s)
+	s = htmlTagRe.ReplaceAllString(s, "")
+	s = html.UnescapeString(s)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			if len(out) > 0 && out[len(out)-1] != "" {
+				out = append(out, "")
+			}
+			continue
+		}
+		out = append(out, trimmed)
+	}
+
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func fallbackBody(raw []byte) string {
+	parts := strings.SplitN(string(raw), "\r\n\r\n", 2)
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[1])
+	}
+	return strings.TrimSpace(string(raw))
 }
