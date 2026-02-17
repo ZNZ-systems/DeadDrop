@@ -1,9 +1,13 @@
 package mail
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/smtp"
+	"strings"
+	"time"
 )
 
 var smtpSendMail = smtp.SendMail
@@ -56,18 +60,63 @@ func (c *SMTPClient) send(envelopeFrom, headerFrom, to, subject, body string) er
 		return errors.New("from address is required")
 	}
 
+	messageID := buildMessageID(envelopeFrom, headerFrom, c.from)
+	dateHeader := time.Now().UTC().Format(time.RFC1123Z)
+
 	headers := fmt.Sprintf(
 		"From: %s\r\n"+
 			"To: %s\r\n"+
 			"Subject: %s\r\n"+
+			"Date: %s\r\n"+
+			"Message-ID: %s\r\n"+
 			"MIME-Version: 1.0\r\n"+
 			"Content-Type: text/html; charset=\"UTF-8\"\r\n"+
 			"\r\n",
-		headerFrom, to, subject,
+		headerFrom, to, subject, dateHeader, messageID,
 	)
 
 	msg := []byte(headers + body)
 	return smtpSendMail(addr, auth, envelopeFrom, []string{to}, msg)
+}
+
+func buildMessageID(addresses ...string) string {
+	domain := "localhost"
+	for _, raw := range addresses {
+		d := extractDomain(raw)
+		if d != "" {
+			domain = d
+			break
+		}
+	}
+
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return fmt.Sprintf("<%d@%s>", time.Now().UTC().UnixNano(), domain)
+	}
+	return fmt.Sprintf("<%d.%x@%s>", time.Now().UTC().UnixNano(), suffix, domain)
+}
+
+func extractDomain(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	addr := raw
+	if parsed, err := mail.ParseAddress(raw); err == nil {
+		addr = parsed.Address
+	}
+
+	at := strings.LastIndex(addr, "@")
+	if at < 1 || at+1 >= len(addr) {
+		return ""
+	}
+
+	domain := strings.Trim(strings.TrimSpace(addr[at+1:]), " >")
+	if domain == "" {
+		return ""
+	}
+	return strings.ToLower(domain)
 }
 
 // Send delivers an HTML email to the specified recipient using SMTP.

@@ -34,6 +34,12 @@ func TestSMTPClientSend_NoAuthWhenCredentialsBlank(t *testing.T) {
 		if !strings.Contains(string(msg), "From: no-reply@example.com\r\n") {
 			t.Fatalf("expected From header in message, got %q", string(msg))
 		}
+		if !strings.Contains(string(msg), "Date: ") {
+			t.Fatalf("expected Date header in message, got %q", string(msg))
+		}
+		if !strings.Contains(string(msg), "Message-ID: <") {
+			t.Fatalf("expected Message-ID header in message, got %q", string(msg))
+		}
 		return nil
 	})
 
@@ -51,6 +57,9 @@ func TestSMTPClientSendFrom_UsesEnvelopeAndHeaderSeparately(t *testing.T) {
 		}
 		if !strings.Contains(string(msg), "From: Support Team <support@example.com>\r\n") {
 			t.Fatalf("expected display name in header From, got %q", string(msg))
+		}
+		if !strings.Contains(string(msg), "@example.com>") {
+			t.Fatalf("expected Message-ID domain derived from sender address, got %q", string(msg))
 		}
 		return nil
 	})
@@ -70,4 +79,3 @@ func TestSMTPClientSend_IncompleteCredentialsFail(t *testing.T) {
 		t.Fatalf("expected incomplete credentials error, got %v", err)
 	}
 }
-
