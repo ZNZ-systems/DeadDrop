@@ -8,11 +8,17 @@ services:
       - "25:2525"
     depends_on:
       - db
+      - smtp-relay
     env_file:
       - .env
     environment:
       INBOUND_SMTP_ADDR: ":2525"
       INBOUND_SMTP_DOMAIN: "${SMTP_DOMAIN:-localhost}"
+      SMTP_HOST: "${SMTP_HOST:-smtp-relay}"
+      SMTP_PORT: "${SMTP_PORT:-25}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-deaddrop@localhost}"
     restart: unless-stopped
 
   db:
@@ -25,6 +31,16 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+
+  smtp-relay:
+    image: boky/postfix:latest
+    environment:
+      ALLOW_EMPTY_SENDER_DOMAINS: "true"
+      POSTFIX_mynetworks: "172.16.0.0/12"
+      POSTFIX_smtpd_tls_security_level: "none"
+      RELAYHOST: "${RELAYHOST:-}"
+      RELAYHOST_USERNAME: "${RELAYHOST_USERNAME:-}"
+      RELAYHOST_PASSWORD: "${RELAYHOST_PASSWORD:-}"
 
 volumes:
   pgdata:

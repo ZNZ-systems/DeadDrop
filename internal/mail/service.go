@@ -50,11 +50,11 @@ func (s *Service) NotifyNewMessage(ctx context.Context, domain *models.Domain, m
 
 // SendReply sends a reply email from a mailbox. Implements conversation.Sender.
 func (s *Service) SendReply(ctx context.Context, to, fromAddress, fromName, subject, body string) error {
-	from := fromAddress
+	headerFrom := fromAddress
 	if fromName != "" {
-		from = fmt.Sprintf("%s <%s>", fromName, fromAddress)
+		headerFrom = fmt.Sprintf("%s <%s>", fromName, fromAddress)
 	}
-	return s.client.SendFrom(from, to, subject, body)
+	return s.client.SendFrom(fromAddress, headerFrom, to, subject, body)
 }
 
 // NotifyNewConversation sends an email notification when a new conversation is started.

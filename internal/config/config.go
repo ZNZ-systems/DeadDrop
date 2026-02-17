@@ -60,6 +60,7 @@ func Load() (*Config, error) {
 	}
 
 	smtpHost := getEnv("SMTP_HOST", "")
+	smtpEnabled := getEnv("SMTP_ENABLED", "true") != "false" && smtpHost != ""
 
 	inboundAddr := getEnv("INBOUND_SMTP_ADDR", "")
 	inboundDomain := getEnv("INBOUND_SMTP_DOMAIN", "localhost")
@@ -74,7 +75,7 @@ func Load() (*Config, error) {
 		SMTPUser:       getEnv("SMTP_USER", ""),
 		SMTPPass:       getEnv("SMTP_PASS", ""),
 		SMTPFrom:       getEnv("SMTP_FROM", ""),
-		SMTPEnabled:    smtpHost != "",
+		SMTPEnabled:    smtpEnabled,
 		RateLimitRPS:   rps,
 		RateLimitBurst: burst,
 		SessionMaxAge:  sessionMaxAge,

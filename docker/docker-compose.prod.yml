@@ -24,14 +24,31 @@ services:
     environment:
       - SECURE_COOKIES=true
       - BASE_URL=https://${DOMAIN}
+      - SMTP_HOST=${SMTP_HOST:-smtp-relay}
+      - SMTP_PORT=${SMTP_PORT:-25}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-deaddrop@localhost}
     depends_on:
       - db
+      - smtp-relay
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  smtp-relay:
+    image: boky/postfix:latest
+    environment:
+      - ALLOW_EMPTY_SENDER_DOMAINS=true
+      - POSTFIX_mynetworks=172.16.0.0/12
+      - POSTFIX_smtpd_tls_security_level=none
+      - RELAYHOST=${RELAYHOST:-}
+      - RELAYHOST_USERNAME=${RELAYHOST_USERNAME:-}
+      - RELAYHOST_PASSWORD=${RELAYHOST_PASSWORD:-}
     restart: unless-stopped
 
   db:

@@ -94,6 +94,9 @@ This gives you:
 - Caddy reverse proxy with **automatic TLS** via Let's Encrypt
 - Health-checked app container with auto-restart
 - Persistent PostgreSQL with Docker volumes
+- Bundled outbound SMTP relay for mailbox replies (no external SMTP creds required)
+
+If your host blocks outbound port `25`, configure `RELAYHOST` credentials in `.env.prod` to use a smarthost (for example Mailgun/SES/Resend SMTP).
 
 ### ARM64 / Raspberry Pi
 
@@ -167,11 +170,15 @@ All configuration is through environment variables:
 | `DATABASE_URL` | `postgres://...localhost...` | PostgreSQL connection string |
 | `BASE_URL` | `http://localhost:8080` | Public URL of your instance |
 | `SECURE_COOKIES` | `true` | Set `false` for local development |
-| `SMTP_HOST` | *(empty)* | Outbound SMTP host — enables email notifications when set |
-| `SMTP_PORT` | `587` | Outbound SMTP port |
+| `SMTP_HOST` | `smtp-relay` | Outbound SMTP host (bundled relay by default) |
+| `SMTP_PORT` | `25` | Outbound SMTP port |
+| `SMTP_ENABLED` | `true` | Set to `false` to disable outbound email entirely |
 | `SMTP_USER` | *(empty)* | SMTP username |
 | `SMTP_PASS` | *(empty)* | SMTP password |
-| `SMTP_FROM` | *(empty)* | "From" address for outbound email |
+| `SMTP_FROM` | `deaddrop@localhost` | "From" address for outbound notifications |
+| `RELAYHOST` | *(empty)* | Optional smarthost (e.g. `[smtp.mailgun.org]:587`) for postfix relay container |
+| `RELAYHOST_USERNAME` | *(empty)* | Optional smarthost username |
+| `RELAYHOST_PASSWORD` | *(empty)* | Optional smarthost password |
 | `INBOUND_SMTP_ADDR` | *(empty)* | Inbound SMTP listen address — enables SMTP server when set (e.g. `:25`) |
 | `INBOUND_SMTP_DOMAIN` | `localhost` | Domain for inbound SMTP |
 | `RATE_LIMIT_RPS` | `2` | API rate limit (requests/sec) |
