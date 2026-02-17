@@ -61,12 +61,20 @@ func NewRenderer(fsys fs.FS) *Renderer {
 // block. For full page requests, it executes the "base" template.
 // It automatically injects the CSRF token from the cookie into template data.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, tmpl string, data map[string]interface{}) {
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+
 	t, ok := r.templates[tmpl]
 	if !ok {
 		slog.Error("template not found", "name", tmpl)
 		http.Error(w, "template not found", http.StatusInternalServerError)
 		return
 	}
+
+	path := req.URL.Path
+	data["CurrentPath"] = path
+	data["ActiveNav"] = activeNav(path)
 
 	// Inject CSRF token from cookie so templates can reference {{.CSRFToken}}
 	if cookie, err := req.Cookie("csrf_token"); err == nil {
@@ -82,5 +90,16 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, tmpl string,
 
 	if err := t.ExecuteTemplate(w, blockName, data); err != nil {
 		slog.Error("failed to execute template", "name", tmpl, "block", blockName, "error", err)
+	}
+}
+
+func activeNav(path string) string {
+	switch {
+	case path == "/" || strings.HasPrefix(path, "/domains"):
+		return "domains"
+	case strings.HasPrefix(path, "/mailboxes"):
+		return "mailboxes"
+	default:
+		return ""
 	}
 }

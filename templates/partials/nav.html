@@ -1,6 +1,12 @@
 {{define "nav"}}
-<nav>
+<nav class="{{if .User}}nav-auth{{end}}">
     <a href="/" class="logo">Dead<span>Drop</span></a>
+    {{if .User}}
+    <div class="nav-primary" aria-label="Primary">
+        <a href="/" class="nav-tab {{if eq .ActiveNav "domains"}}nav-tab-active{{end}}">Domains</a>
+        <a href="/mailboxes" class="nav-tab {{if eq .ActiveNav "mailboxes"}}nav-tab-active{{end}}">Mailboxes</a>
+    </div>
+    {{end}}
     {{if .User}}
     <div class="nav-right">
         <span class="nav-email">{{.User.Email}}</span>

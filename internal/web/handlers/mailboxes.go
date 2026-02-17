@@ -316,7 +316,7 @@ func (h *MailboxHandler) HandleDeleteMailbox(w http.ResponseWriter, r *http.Requ
 	}
 
 	_ = h.mailboxes.Delete(r.Context(), mb.ID)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/mailboxes", http.StatusSeeOther)
 }
 
 func (h *MailboxHandler) HandleAddStream(w http.ResponseWriter, r *http.Request) {

@@ -79,6 +79,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Delete("/messages/{messageID}", deps.MessageHandler.HandleDeleteMessage)
 
 		// Mailbox routes
+		r.Get("/mailboxes", deps.MailboxHandler.ShowDashboard)
 		r.Get("/mailboxes/new", deps.MailboxHandler.ShowNewMailbox)
 		r.Post("/mailboxes", deps.MailboxHandler.HandleCreateMailbox)
 		r.Get("/mailboxes/{id}", deps.MailboxHandler.ShowMailboxDetail)
